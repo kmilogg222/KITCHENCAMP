@@ -7,42 +7,45 @@ import CartView from './views/CartView';
 import InventoryView from './views/InventoryView';
 import SuppliersView from './views/SuppliersView';
 import CalendarView from './views/CalendarView';
-import { recipes as MOCK_RECIPES } from './data/mockData';
+import { recipes as MOCK_RECIPES, ingredientsCatalog as MOCK_CATALOG } from './data/mockData';
 
 export default function App() {
   const [activeView, setActiveView] = useState('dashboard');
   const [selectedRecipe, setSelectedRecipe] = useState(null);
 
-  // ── Recipes state (mock + custom) ─────────────────────────────────────────
+  // ── Global ingredient catalog ─────────────────────────────────────────────
+  const [ingredients, setIngredients] = useState(MOCK_CATALOG);
+
+  const addIngredient = (ing) => setIngredients(prev => [...prev, ing]);
+
+  const updateIngredient = (updated) =>
+    setIngredients(prev => prev.map(i => i.id === updated.id ? updated : i));
+
+  const deleteIngredient = (id) =>
+    setIngredients(prev => prev.filter(i => i.id !== id));
+
+  // ── Recipes ───────────────────────────────────────────────────────────────
   const [recipes, setRecipes] = useState(MOCK_RECIPES);
 
-  // ── Create/Edit flow ──────────────────────────────────────────────────────
-  // editingRecipe: null → create mode | recipe object → edit mode
+  // ── Create / Edit flow ────────────────────────────────────────────────────
   const [editingRecipe, setEditingRecipe] = useState(null);
   const [showCreateView, setShowCreateView] = useState(false);
 
-  const openCreateView = () => {
-    setEditingRecipe(null);
-    setShowCreateView(true);
-  };
+  const openCreateView = () => { setEditingRecipe(null); setShowCreateView(true); setActiveView('recipes'); };
+  const openEditView = (recipe) => { setEditingRecipe(recipe); setShowCreateView(true); setActiveView('recipes'); };
 
-  const openEditView = (recipe) => {
-    setEditingRecipe(recipe);
-    setShowCreateView(true);
-  };
-
-  const handleSaveRecipe = (recipe) => {
+  // onSave receives (recipe, newIngredients[])
+  const handleSaveRecipe = (recipe, newIngredients = []) => {
+    // 1. Add any brand-new ingredients to the global catalog
+    if (newIngredients.length > 0) {
+      setIngredients(prev => [...prev, ...newIngredients]);
+    }
+    // 2. Upsert recipe
     setRecipes(prev => {
       const exists = prev.some(r => r.id === recipe.id);
-      if (exists) {
-        // Update existing
-        return prev.map(r => r.id === recipe.id ? recipe : r);
-      } else {
-        // Add new
-        return [...prev, recipe];
-      }
+      return exists ? prev.map(r => r.id === recipe.id ? recipe : r) : [...prev, recipe];
     });
-    // After save: select the recipe and go to calculator
+    // 3. Navigate back and auto-select
     setSelectedRecipe(recipe);
     setShowCreateView(false);
     setActiveView('recipes');
@@ -53,39 +56,30 @@ export default function App() {
     if (selectedRecipe?.id === id) setSelectedRecipe(null);
   };
 
-  const handleCancelCreate = () => {
-    setShowCreateView(false);
-    setActiveView('recipes');
-  };
+  const handleCancelCreate = () => { setShowCreateView(false); setActiveView('recipes'); };
 
-  // ── Cart state ────────────────────────────────────────────────────────────
+  // ── Cart ──────────────────────────────────────────────────────────────────
   const [cart, setCart] = useState([]);
 
   const addToCart = (ingredient, result) => {
     setCart(prev => {
       if (prev.some(i => i.ingredientId === ingredient.id)) return prev;
-      return [
-        ...prev,
-        {
-          ingredientId: ingredient.id,
-          name: ingredient.name,
-          R: result.R,
-          pricePerPack: ingredient.pricePerPack,
-          supplier: ingredient.supplier,
-          packSize: ingredient.packSize,
-          unit: ingredient.unit,
-        },
-      ];
+      return [...prev, {
+        ingredientId: ingredient.id,
+        name: ingredient.name,
+        R: result.R,
+        pricePerPack: ingredient.pricePerPack,
+        supplier: ingredient.supplier,
+        packSize: ingredient.packSize,
+        unit: ingredient.unit,
+      }];
     });
   };
 
-  const removeFromCart = (ingredientId) => {
-    setCart(prev => prev.filter(i => i.ingredientId !== ingredientId));
-  };
-
+  const removeFromCart = (ingredientId) => setCart(prev => prev.filter(i => i.ingredientId !== ingredientId));
   const clearCart = () => setCart([]);
 
-  // ── Navigation handler (reset create view when going elsewhere) ───────────
+  // ── Navigation ────────────────────────────────────────────────────────────
   const handleNavigate = (view) => {
     if (view !== 'recipes') setShowCreateView(false);
     setActiveView(view);
@@ -100,7 +94,7 @@ export default function App() {
         {activeView === 'dashboard' && (
           <DashboardView
             recipes={recipes}
-            onSelectRecipe={(r) => { setSelectedRecipe(r); setActiveView('recipes'); }}
+            onSelectRecipe={(r) => { setSelectedRecipe(r); setActiveView('recipes'); setShowCreateView(false); }}
             onNavigate={handleNavigate}
             onCreateNew={openCreateView}
           />
@@ -109,6 +103,7 @@ export default function App() {
         {activeView === 'recipes' && !showCreateView && (
           <RecipesView
             recipes={recipes}
+            ingredientsCatalog={ingredients}
             selectedRecipe={selectedRecipe}
             setSelectedRecipe={setSelectedRecipe}
             cart={cart}
@@ -122,20 +117,28 @@ export default function App() {
         {activeView === 'recipes' && showCreateView && (
           <CreateRecipeView
             editingRecipe={editingRecipe}
+            ingredientsCatalog={ingredients}
             onSave={handleSaveRecipe}
             onCancel={handleCancelCreate}
           />
         )}
 
         {activeView === 'calendar' && <CalendarView />}
-        {activeView === 'inventory' && <InventoryView recipes={recipes} />}
-        {activeView === 'suppliers' && <SuppliersView />}
-        {activeView === 'cart' && (
-          <CartView
-            cart={cart}
-            onRemove={removeFromCart}
-            onClearCart={clearCart}
+
+        {activeView === 'inventory' && (
+          <InventoryView
+            ingredients={ingredients}
+            recipes={recipes}
+            onUpdateIngredient={updateIngredient}
+            onAddIngredient={addIngredient}
+            onDeleteIngredient={deleteIngredient}
           />
+        )}
+
+        {activeView === 'suppliers' && <SuppliersView />}
+
+        {activeView === 'cart' && (
+          <CartView cart={cart} onRemove={removeFromCart} onClearCart={clearCart} />
         )}
       </main>
     </div>
