@@ -7,7 +7,11 @@ import CartView from './views/CartView';
 import InventoryView from './views/InventoryView';
 import SuppliersView from './views/SuppliersView';
 import CalendarView from './views/CalendarView';
-import { recipes as MOCK_RECIPES, ingredientsCatalog as MOCK_CATALOG } from './data/mockData';
+import {
+  recipes as MOCK_RECIPES,
+  ingredientsCatalog as MOCK_CATALOG,
+  suppliers as MOCK_SUPPLIERS,
+} from './data/mockData';
 
 export default function App() {
   const [activeView, setActiveView] = useState('dashboard');
@@ -17,12 +21,19 @@ export default function App() {
   const [ingredients, setIngredients] = useState(MOCK_CATALOG);
 
   const addIngredient = (ing) => setIngredients(prev => [...prev, ing]);
-
   const updateIngredient = (updated) =>
     setIngredients(prev => prev.map(i => i.id === updated.id ? updated : i));
-
   const deleteIngredient = (id) =>
     setIngredients(prev => prev.filter(i => i.id !== id));
+
+  // ── Suppliers ─────────────────────────────────────────────────────────────
+  const [suppliers, setSuppliers] = useState(MOCK_SUPPLIERS);
+
+  const addSupplier = (sup) => setSuppliers(prev => [...prev, sup]);
+  const updateSupplier = (updated) =>
+    setSuppliers(prev => prev.map(s => s.id === updated.id ? updated : s));
+  const deleteSupplier = (id) =>
+    setSuppliers(prev => prev.filter(s => s.id !== id));
 
   // ── Recipes ───────────────────────────────────────────────────────────────
   const [recipes, setRecipes] = useState(MOCK_RECIPES);
@@ -34,18 +45,12 @@ export default function App() {
   const openCreateView = () => { setEditingRecipe(null); setShowCreateView(true); setActiveView('recipes'); };
   const openEditView = (recipe) => { setEditingRecipe(recipe); setShowCreateView(true); setActiveView('recipes'); };
 
-  // onSave receives (recipe, newIngredients[])
   const handleSaveRecipe = (recipe, newIngredients = []) => {
-    // 1. Add any brand-new ingredients to the global catalog
-    if (newIngredients.length > 0) {
-      setIngredients(prev => [...prev, ...newIngredients]);
-    }
-    // 2. Upsert recipe
+    if (newIngredients.length > 0) setIngredients(prev => [...prev, ...newIngredients]);
     setRecipes(prev => {
       const exists = prev.some(r => r.id === recipe.id);
       return exists ? prev.map(r => r.id === recipe.id ? recipe : r) : [...prev, recipe];
     });
-    // 3. Navigate back and auto-select
     setSelectedRecipe(recipe);
     setShowCreateView(false);
     setActiveView('recipes');
@@ -129,13 +134,22 @@ export default function App() {
           <InventoryView
             ingredients={ingredients}
             recipes={recipes}
+            suppliers={suppliers}
             onUpdateIngredient={updateIngredient}
             onAddIngredient={addIngredient}
             onDeleteIngredient={deleteIngredient}
           />
         )}
 
-        {activeView === 'suppliers' && <SuppliersView />}
+        {activeView === 'suppliers' && (
+          <SuppliersView
+            suppliers={suppliers}
+            ingredients={ingredients}
+            onAddSupplier={addSupplier}
+            onUpdateSupplier={updateSupplier}
+            onDeleteSupplier={deleteSupplier}
+          />
+        )}
 
         {activeView === 'cart' && (
           <CartView cart={cart} onRemove={removeFromCart} onClearCart={clearCart} />

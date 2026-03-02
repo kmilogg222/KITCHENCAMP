@@ -197,9 +197,9 @@ export const recipes = [
 
 // ── SUPPLIERS ────────────────────────────────────────────────────────────────
 export const suppliers = [
-    { id: 'SISCO', name: 'SISCO', contact: 'sisco.com', email: 'orders@sisco.com', color: '#6b3fa0' },
-    { id: 'Driscoll', name: 'Driscoll', contact: 'driscoll.com', email: 'orders@driscoll.com', color: '#4ecdc4' },
-    { id: 'FreshFarm', name: 'FreshFarm', contact: 'freshfarm.com', email: 'orders@freshfarm.com', color: '#10b981' },
+    { id: 'SISCO', name: 'SISCO', contact: 'sisco.com', email: 'orders@sisco.com', phone: '+1 800 747 2600', color: '#6b3fa0', notes: 'Primary food distributor' },
+    { id: 'Driscoll', name: 'Driscoll', contact: 'driscoll.com', email: 'orders@driscoll.com', phone: '+1 800 871 3333', color: '#4ecdc4', notes: 'Fresh produce specialist' },
+    { id: 'FreshFarm', name: 'FreshFarm', contact: 'freshfarm.com', email: 'orders@freshfarm.com', phone: '+1 888 374 2764', color: '#10b981', notes: 'Local farm delivery, Mon-Fri' },
 ];
 
 // ── GROUPS ───────────────────────────────────────────────────────────────────

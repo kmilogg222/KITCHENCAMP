@@ -1,12 +1,10 @@
 import { useState } from 'react';
 import {
     Plus, Pencil, Trash2, Save, X, AlertTriangle,
-    CheckCircle2, Package, ChevronUp, ChevronDown, Search
+    CheckCircle2, ChevronUp, ChevronDown, Search
 } from 'lucide-react';
-import { suppliers as SUPPLIERS } from '../data/mockData';
 
 const UNITS = ['g', 'ml', 'units', 'kg', 'L', 'oz'];
-const SUPPLIER_IDS = SUPPLIERS.map(s => s.id);
 
 // ── Shared input styles ───────────────────────────────────────────────────────
 const inputSx = {
@@ -33,7 +31,7 @@ function StockStepper({ value, onChange }) {
 }
 
 // ── Add / Edit ingredient modal ───────────────────────────────────────────────
-function IngredientModal({ ingredient, onSave, onClose }) {
+function IngredientModal({ ingredient, supplierIds = [], onSave, onClose }) {
     const isNew = !ingredient.id;
     const [form, setForm] = useState({
         name: ingredient.name ?? '',
@@ -133,7 +131,7 @@ function IngredientModal({ ingredient, onSave, onClose }) {
                 <div style={{ marginBottom: 12 }}>
                     <label style={{ fontSize: 11, fontWeight: 700, color: '#6b3fa0', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Supplier</label>
                     <select value={form.supplier} onChange={e => set('supplier', e.target.value)} style={inputSx}>
-                        {SUPPLIER_IDS.map(s => <option key={s}>{s}</option>)}
+                        {supplierIds.map(s => <option key={s}>{s}</option>)}
                     </select>
                 </div>
 
@@ -161,7 +159,8 @@ function IngredientModal({ ingredient, onSave, onClose }) {
 }
 
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
-export default function InventoryView({ ingredients, recipes, onUpdateIngredient, onAddIngredient, onDeleteIngredient }) {
+export default function InventoryView({ ingredients, recipes, suppliers = [], onUpdateIngredient, onAddIngredient, onDeleteIngredient }) {
+    const SUPPLIER_IDS = suppliers.map(s => s.id);
     const [search, setSearch] = useState('');
     const [filterSupplier, setFilterSupplier] = useState('all');
     const [filterStatus, setFilterStatus] = useState('all');
@@ -193,7 +192,7 @@ export default function InventoryView({ ingredients, recipes, onUpdateIngredient
         }
     };
 
-    const supColor = (supId) => SUPPLIERS.find(s => s.id === supId)?.color ?? '#6b3fa0';
+    const supColor = (supId) => suppliers.find(s => s.id === supId)?.color ?? '#6b3fa0';
 
     return (
         <div className="fade-in-up">
@@ -378,9 +377,9 @@ export default function InventoryView({ ingredients, recipes, onUpdateIngredient
             {modal !== null && (
                 <IngredientModal
                     ingredient={modal}
+                    supplierIds={SUPPLIER_IDS}
                     onSave={(ing) => {
                         if (!ing.id || modal.id === undefined) {
-                            // new ingredient (modal was {})
                             onAddIngredient(ing);
                         } else {
                             onUpdateIngredient(ing);
