@@ -1,11 +1,21 @@
-// ─── KitchenCalc — Data Layer ────────────────────────────────────────────────
-//
-// Architecture:
-//   ingredientsCatalog  → global flat list; stock/price live here
-//   recipes             → each ingredient is a REFERENCE { ingredientId, portionByGroup }
-//
-// This allows shared ingredients across recipes. Stock update in one place
-// propagates automatically to every recipe that uses it.
+/**
+ * @file mockData.js
+ * @description Capa de datos inicial de KitchenCalc (datos de muestra / seed).
+ *
+ * Arquitectura de datos:
+ *   ingredientsCatalog  → catálogo global plano; stock y precio viven aquí.
+ *   recipes             → cada ingrediente es una REFERENCIA { ingredientId, portionByGroup }.
+ *
+ * Al compartir ingredientes entre recetas, una actualización de stock o precio
+ * en el catálogo se propaga automáticamente a todas las recetas que lo usan.
+ *
+ * Fórmulas del motor de cálculo:
+ *   D       = Σ(Pi × Ci)        demanda total (porción × cantidad por grupo)
+ *   D_safe  = D × 1.10          +10% margen de seguridad
+ *   R       = ⌈D_safe / V⌉      packs a ordenar (redondear hacia arriba)
+ *
+ * @module mockData
+ */
 
 // ── INGREDIENT CATALOG ───────────────────────────────────────────────────────
 export const ingredientsCatalog = [

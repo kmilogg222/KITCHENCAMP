@@ -1,3 +1,25 @@
+/**
+ * @file SuppliersView.jsx
+ * @description Gestión completa de proveedores (CRUD).
+ *
+ * Sub-componentes internos:
+ *  - SupplierModal      : Modal para crear o editar un supplier.
+ *  - DeleteConfirmModal : Modal de confirmación antes de eliminar.
+ *
+ * Funcionalidades:
+ *  - Grid de tarjetas con info de contacto y lista de ingredientes vinculados.
+ *  - Color picker con paleta preset + selector de color nativo.
+ *  - Autocompletar el campo ID a partir del nombre al crear.
+ *  - Validación de email y de ID duplicado.
+ *  - Advertencia al eliminar un supplier con ingredientes vinculados.
+ *
+ * Props:
+ *  - suppliers        {Supplier[]} - Lista global de suppliers.
+ *  - ingredients      {Ingredient[]} - Para calcular ingredientes vinculados.
+ *  - onAddSupplier    {Function}   - Agrega supplier al estado global.
+ *  - onUpdateSupplier {Function}   - Actualiza supplier en el estado global.
+ *  - onDeleteSupplier {Function}   - Elimina supplier del estado global.
+ */
 import { useState } from 'react';
 import { ExternalLink, Mail, Plus, Pencil, Trash2, Save, X, Search, Phone, Building2 } from 'lucide-react';
 

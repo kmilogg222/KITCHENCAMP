@@ -1,3 +1,19 @@
+/**
+ * @file DashboardView.jsx
+ * @description Vista principal / portal de la aplicación.
+ *
+ * Muestra:
+ *  - Tarjetas de estadísticas rápidas (recetas, pedidos, tiempo promedio).
+ *  - Barra de búsqueda (decorativa; al hacer click navega a RecipesView).
+ *  - Grid de recetas disponibles con acceso directo.
+ *  - Tarjeta CTA para crear una nueva receta.
+ *
+ * Props:
+ *  - recipes        {Recipe[]}  - Lista de recetas activas.
+ *  - onSelectRecipe {Function}  - Selecciona una receta y navega a RecipesView.
+ *  - onNavigate     {Function}  - Navega a cualquier vista por ID.
+ *  - onCreateNew    {Function}  - Abre el formulario de creación de receta.
+ */
 import { Search, Sparkles, TrendingUp, Clock, ChefHat, Plus } from 'lucide-react';
 import StarRating from '../components/StarRating';
 

@@ -1,3 +1,12 @@
+/**
+ * @file Toggle.jsx
+ * @description Toggle switch reutilizable (on/off).
+ *
+ * Props:
+ *  - on       {boolean}  - Estado actual del toggle.
+ *  - onToggle {Function} - Callback invocado al hacer click.
+ *  - label    {string}   - Texto opcional junto al toggle.
+ */
 export default function Toggle({ on, onToggle, label }) {
     return (
         <div onClick={onToggle} className="toggle-wrap" title={label}>

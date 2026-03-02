@@ -1,3 +1,19 @@
+/**
+ * @file CalendarView.jsx
+ * @description Calendario de producción con planificación de comidas por día.
+ *
+ * Sub-componentes internos:
+ *  - MealBadge    : Chip compacto que muestra una comida (slot + nombre).
+ *  - AddMealModal : Modal para agregar una receta a un slot del día.
+ *  - DayPanel     : Panel lateral deslizante con el detalle de las comidas del día.
+ *
+ * Estado local:
+ *  - meals       : { [dateKey: string]: MealEntry[] } donde dateKey = 'YYYY-MM-DD'.
+ *  - selectedDay : { key, label } del día actualmente abierto en el panel.
+ *
+ * Props:
+ *  - recipes {Recipe[]} - Lista de recetas disponibles para planificar.
+ */
 import { useState, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Plus, X, UtensilsCrossed, Sun, Coffee, Moon, Apple } from 'lucide-react';
 

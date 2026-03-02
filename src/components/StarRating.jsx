@@ -1,3 +1,11 @@
+/**
+ * @file StarRating.jsx
+ * @description Muestra una calificación visual con estrellas (sólo lectura).
+ *
+ * Props:
+ *  - rating {number} - Número de estrellas llenas (0 a `max`).
+ *  - max    {number} - Total de estrellas a mostrar. Por defecto: 5.
+ */
 import { Star } from 'lucide-react';
 
 export default function StarRating({ rating, max = 5 }) {

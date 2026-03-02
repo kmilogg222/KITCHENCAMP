@@ -1,6 +1,20 @@
+/**
+ * @file Sidebar.jsx
+ * @description Barra de navegación lateral fija.
+ *
+ * Renderiza los botones de navegación deducidos del array `navItems`.
+ * El ícono del carrito muestra un badge con el número de ítems si es > 0.
+ *
+ * Props:
+ *  - activeView {string}   - ID de la vista actualmente activa.
+ *  - onNavigate {Function} - Callback para cambiar de vista.
+ *  - cartCount  {number}   - Número de ítems en el carrito (para el badge).
+ */
 import { ChefHat, Calendar, Package, Truck, ShoppingCart } from 'lucide-react';
 
 export default function Sidebar({ activeView, onNavigate, cartCount }) {
+    // Definición declarativa de los ítems de navegación.
+    // Agregar una nueva sección solo requiere agregar una entrada aquí.
     const navItems = [
         { id: 'recipes', icon: ChefHat, label: 'Recipes' },
         { id: 'calendar', icon: Calendar, label: 'Calendar' },

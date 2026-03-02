@@ -1,3 +1,24 @@
+/**
+ * @file InventoryView.jsx
+ * @description Gestión del catálogo global de ingredientes.
+ *
+ * Sub-componentes internos:
+ *  - StockStepper     : Incrementa/decrementa el stock de un pack.
+ *  - IngredientModal  : Modal para crear o editar un ingrediente.
+ *
+ * Funcionalidades:
+ *  - Tabla filtrable por nombre, supplier y nivel de stock.
+ *  - Indicador visual de stock bajo (barra de progreso + borde rojo).
+ *  - CRUD completo: crear, editar, eliminar con doble confirmación.
+ *
+ * Props:
+ *  - ingredients        {Ingredient[]} - Catálogo de ingredientes.
+ *  - recipes            {Recipe[]}     - Para mostrar en qué recetas se usa cada ingrediente.
+ *  - suppliers          {Supplier[]}   - Para colores y dropdown de selección.
+ *  - onUpdateIngredient {Function}     - Actualiza un ingrediente en App.
+ *  - onAddIngredient    {Function}     - Agrega un ingrediente al catálogo.
+ *  - onDeleteIngredient {Function}     - Elimina un ingrediente del catálogo.
+ */
 import { useState } from 'react';
 import {
     Plus, Pencil, Trash2, Save, X, AlertTriangle,

@@ -1,8 +1,31 @@
+/**
+ * @file CartView.jsx
+ * @description Vista del carrito de compras.
+ *
+ * Muestra los ítems agrupados por supplier con subtotales,
+ * permite exportar la lista como archivo .txt y ver el panel
+ * lateral de "Vendor List" con checkboxes por ítem.
+ *
+ * Props:
+ *  - cart      {CartItem[]}  - Ítems actuales del carrito.
+ *  - suppliers {Supplier[]}  - Lista global de suppliers (para colores/links).
+ *  - onRemove  {Function}    - Elimina un ítem por ingredientId.
+ *  - onClearCart {Function}  - Vacía todo el carrito.
+ */
 import { useState } from 'react';
 import { Trash2, Download, CheckCircle2, ExternalLink } from 'lucide-react';
-import { suppliers } from '../data/mockData';
 
-function SupplierSection({ supplierName, items, onRemove }) {
+/**
+ * Sección de carrito agrupada por un supplier.
+ * Muestra el encabezado con color de marca, los ítems y el subtotal.
+ *
+ * @param {string}     supplierName - ID/nombre del supplier.
+ * @param {CartItem[]} items        - Ítems de este supplier.
+ * @param {Supplier[]} suppliers    - Lista global de suppliers.
+ * @param {Function}   onRemove     - Callback para eliminar un ítem.
+ */
+function SupplierSection({ supplierName, items, suppliers, onRemove }) {
+    // Busca el perfil completo del supplier para obtener color y contacto
     const sup = suppliers.find(s => s.id === supplierName);
     const subtotal = items.reduce((s, i) => s + i.pricePerPack * i.R, 0);
 
@@ -62,7 +85,8 @@ function SupplierSection({ supplierName, items, onRemove }) {
     );
 }
 
-export default function CartView({ cart, onRemove, onClearCart }) {
+/** Componente principal del carrito de compras. */
+export default function CartView({ cart, suppliers = [], onRemove, onClearCart }) {
     const [exported, setExported] = useState(false);
     const [vendorOpen, setVendorOpen] = useState(false);
 
@@ -136,8 +160,15 @@ export default function CartView({ cart, onRemove, onClearCart }) {
                                 ))}
                             </div>
 
+                            {/* Renderiza una sección por supplier */}
                             {Object.entries(grouped).map(([sup, items]) => (
-                                <SupplierSection key={sup} supplierName={sup} items={items} onRemove={onRemove} />
+                                <SupplierSection
+                                    key={sup}
+                                    supplierName={sup}
+                                    items={items}
+                                    suppliers={suppliers}
+                                    onRemove={onRemove}
+                                />
                             ))}
 
                             {/* Total bar */}
@@ -170,6 +201,7 @@ export default function CartView({ cart, onRemove, onClearCart }) {
                             <div style={{ fontWeight: 700, color: '#3d1a78', fontSize: 15, marginBottom: 16 }}>
                                 📋 Vendor's List
                             </div>
+                            {/* Lista compacta de todos los suppliers con checkboxes */}
                             {suppliers.map(sup => {
                                 const items = cart.filter(i => i.supplier === sup.id);
                                 return (
