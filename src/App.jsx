@@ -128,7 +128,7 @@ export default function App() {
           />
         )}
 
-        {activeView === 'calendar' && <CalendarView />}
+        {activeView === 'calendar' && <CalendarView recipes={recipes} />}
 
         {activeView === 'inventory' && (
           <InventoryView
