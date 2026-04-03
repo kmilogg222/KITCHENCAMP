@@ -14,10 +14,10 @@
  *  - onNavigate     {Function}  - Navega a cualquier vista por ID.
  *  - onCreateNew    {Function}  - Abre el formulario de creación de receta.
  */
-import { Search, Sparkles, TrendingUp, Clock, ChefHat, Plus } from 'lucide-react';
+import { Search, Sparkles, TrendingUp, Clock, ChefHat, Plus, ClipboardList } from 'lucide-react';
 import StarRating from '../components/StarRating';
 
-export default function DashboardView({ recipes, onSelectRecipe, onNavigate, onCreateNew }) {
+export default function DashboardView({ recipes, menus = [], onSelectRecipe, onSelectMenu, onNavigate, onCreateNew, onCreateNewMenu }) {
     return (
         <div className="fade-in-up">
             {/* Header */}
@@ -55,7 +55,7 @@ export default function DashboardView({ recipes, onSelectRecipe, onNavigate, onC
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 32 }}>
                 {[
                     { label: 'Active Recipes', value: recipes.length, icon: ChefHat, color: '#6b3fa0' },
-                    { label: 'Orders This Week', value: 12, icon: TrendingUp, color: '#4ecdc4' },
+                    { label: 'Active Menus', value: menus.length, icon: ClipboardList, color: '#4ecdc4' },
                     { label: 'Avg. Prep Time', value: '35 min', icon: Clock, color: '#f59e0b' },
                 ].map(({ label, value, icon: Icon, color }) => (
                     <div key={label} className="glass-card" style={{ padding: 20 }}>
@@ -156,6 +156,69 @@ export default function DashboardView({ recipes, onSelectRecipe, onNavigate, onC
                         </div>
                         <div style={{ fontWeight: 600, color: '#6b3fa0', fontSize: 14 }}>Create Recipe</div>
                         <div style={{ fontSize: 11, color: '#9b6dca', textAlign: 'center' }}>Add your own custom recipe</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Menu grid */}
+            <div style={{ marginTop: 32 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <h2 style={{ fontSize: 18, fontWeight: 700, color: '#3d1a78', margin: 0 }}>
+                        Available Menus
+                        <span style={{ fontSize: 13, fontWeight: 400, color: '#9b6dca', marginLeft: 8 }}>
+                            ({menus.length})
+                        </span>
+                    </h2>
+                    <button onClick={() => onNavigate('menus')} className="btn-ghost" style={{ padding: '6px 14px', fontSize: 12 }}>
+                        View all →
+                    </button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
+                    {menus.map((m) => {
+                        const mRecipes = m.recipeIds.map(rid => recipes.find(r => r.id === rid)).filter(Boolean);
+                        return (
+                            <div key={m.id}
+                                onClick={() => onSelectMenu(m)}
+                                className="glass-card"
+                                style={{ padding: 20, cursor: 'pointer', transition: 'all 0.25s', position: 'relative', overflow: 'hidden' }}
+                                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 16px 40px rgba(109,63,160,0.2)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
+                            >
+                                <div style={{ fontSize: 40, marginBottom: 12 }}>{m.image}</div>
+                                <div style={{ fontWeight: 700, fontSize: 15, color: '#3d1a78', marginBottom: 4 }}>{m.name}</div>
+                                <div style={{ fontSize: 11, color: '#9b6dca', marginBottom: 8 }}>{m.description}</div>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <div style={{ display: 'flex', gap: 3 }}>
+                                        {mRecipes.map(r => <span key={r.id} style={{ fontSize: 16 }} title={r.name}>{r.image}</span>)}
+                                    </div>
+                                    <span className="chip chip-teal">{mRecipes.length} recipe{mRecipes.length !== 1 ? 's' : ''}</span>
+                                </div>
+                            </div>
+                        );
+                    })}
+
+                    {/* Create new menu card */}
+                    <div
+                        onClick={onCreateNewMenu}
+                        className="glass-card"
+                        style={{
+                            padding: 20, cursor: 'pointer', transition: 'all 0.25s',
+                            border: '1.5px dashed rgba(78,205,196,0.45)',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            justifyContent: 'center', gap: 10, minHeight: 160,
+                            background: 'rgba(255,255,255,0.3)',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#4ecdc4'; e.currentTarget.style.background = 'rgba(78,205,196,0.05)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(78,205,196,0.45)'; e.currentTarget.style.background = 'rgba(255,255,255,0.3)'; }}
+                    >
+                        <div style={{
+                            width: 48, height: 48, borderRadius: 14, background: 'rgba(78,205,196,0.1)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                            <Plus size={24} color="#4ecdc4" />
+                        </div>
+                        <div style={{ fontWeight: 600, color: '#4ecdc4', fontSize: 14 }}>Create Menu</div>
+                        <div style={{ fontSize: 11, color: '#9b6dca', textAlign: 'center' }}>Combine recipes into a menu</div>
                     </div>
                 </div>
             </div>

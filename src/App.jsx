@@ -22,6 +22,8 @@ import Sidebar from './components/Sidebar';
 import DashboardView from './views/DashboardView';
 import RecipesView from './views/RecipesView';
 import CreateRecipeView from './views/CreateRecipeView';
+import MenusView from './views/MenusView';
+import CreateMenuView from './views/CreateMenuView';
 import CalendarView from './views/CalendarView';
 import InventoryView from './views/InventoryView';
 import SuppliersView from './views/SuppliersView';
@@ -36,6 +38,7 @@ import {
   recipes as MOCK_RECIPES,
   ingredientsCatalog as MOCK_CATALOG,
   suppliers as MOCK_SUPPLIERS,
+  menus as MOCK_MENUS,
 } from './data/mockData';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,6 +72,13 @@ export default function App() {
     update: updateRecipe,
     remove: removeRecipe,
   } = useCrudState(MOCK_RECIPES);
+
+  const {
+    items: menus,
+    add: addMenu,
+    update: updateMenu,
+    remove: removeMenu,
+  } = useCrudState(MOCK_MENUS);
 
   // ── Carrito de compras ────────────────────────────────────────────────────
   const { cart, addToCart, removeFromCart, clearCart } = useCartManager();
@@ -131,6 +141,53 @@ export default function App() {
     setActiveView('recipes');
   };
 
+  // ── Flujo de Crear / Editar menú ──────────────────────────────────────────
+  const [editingMenu, setEditingMenu] = useState(null);
+  const [showCreateMenuView, setShowCreateMenuView] = useState(false);
+  const [selectedMenu, setSelectedMenu] = useState(null);
+
+  /** Abre el formulario en modo CREACIÓN de menú. */
+  const openCreateMenuView = () => {
+    setEditingMenu(null);
+    setShowCreateMenuView(true);
+    setActiveView('menus');
+  };
+
+  /** Abre el formulario en modo EDICIÓN con el menú dado. */
+  const openEditMenuView = (menu) => {
+    setEditingMenu(menu);
+    setShowCreateMenuView(true);
+    setActiveView('menus');
+  };
+
+  /**
+   * Handler llamado desde CreateMenuView al guardar.
+   * @param {object} menu - Objeto menú a crear o actualizar.
+   */
+  const handleSaveMenu = (menu) => {
+    const exists = menus.some(m => m.id === menu.id);
+    if (exists) updateMenu(menu);
+    else addMenu(menu);
+    setSelectedMenu(menu);
+    setShowCreateMenuView(false);
+    setActiveView('menus');
+  };
+
+  /**
+   * Elimina un menú. Si era el seleccionado, limpia la selección.
+   * @param {string} id - ID del menú a eliminar.
+   */
+  const handleDeleteMenu = (id) => {
+    removeMenu(id);
+    if (selectedMenu?.id === id) setSelectedMenu(null);
+  };
+
+  /** Cancela la creación/edición de un menú y vuelve al listado. */
+  const handleCancelCreateMenu = () => {
+    setShowCreateMenuView(false);
+    setActiveView('menus');
+  };
+
   /**
    * Centraliza la navegación entre vistas.
    * Al salir de la sección de recetas se descarta el formulario abierto.
@@ -138,6 +195,7 @@ export default function App() {
    */
   const handleNavigate = (view) => {
     if (view !== 'recipes') setShowCreateView(false);
+    if (view !== 'menus') setShowCreateMenuView(false);
     setActiveView(view);
   };
 
@@ -165,13 +223,20 @@ export default function App() {
         {activeView === 'dashboard' && (
           <DashboardView
             recipes={recipes}
+            menus={menus}
             onSelectRecipe={(r) => {
               setSelectedRecipe(r);
               setActiveView('recipes');
               setShowCreateView(false);
             }}
+            onSelectMenu={(m) => {
+              setSelectedMenu(m);
+              setActiveView('menus');
+              setShowCreateMenuView(false);
+            }}
             onNavigate={handleNavigate}
             onCreateNew={openCreateView}
+            onCreateNewMenu={openCreateMenuView}
           />
         )}
 
@@ -200,9 +265,35 @@ export default function App() {
           />
         )}
 
+        {/* ── Listado de Menús ────────────────────────────────────── */}
+        {activeView === 'menus' && !showCreateMenuView && (
+          <MenusView
+            menus={menus}
+            recipes={recipes}
+            ingredientsCatalog={ingredients}
+            selectedMenu={selectedMenu}
+            setSelectedMenu={setSelectedMenu}
+            cart={cart}
+            onAddToCart={addToCart}
+            onCreateNew={openCreateMenuView}
+            onEditMenu={openEditMenuView}
+            onDeleteMenu={handleDeleteMenu}
+          />
+        )}
+
+        {/* ── Formulario Crear / Editar Menú ────────────────────────── */}
+        {activeView === 'menus' && showCreateMenuView && (
+          <CreateMenuView
+            editingMenu={editingMenu}
+            recipes={recipes}
+            onSave={handleSaveMenu}
+            onCancel={handleCancelCreateMenu}
+          />
+        )}
+
         {/* ── Calendario de Producción ─────────────────────────────── */}
         {activeView === 'calendar' && (
-          <CalendarView recipes={recipes} />
+          <CalendarView recipes={recipes} menus={menus} />
         )}
 
         {/* ── Inventario (catálogo global de ingredientes) ──────────── */}

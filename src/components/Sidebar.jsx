@@ -10,13 +10,14 @@
  *  - onNavigate {Function} - Callback para cambiar de vista.
  *  - cartCount  {number}   - Número de ítems en el carrito (para el badge).
  */
-import { ChefHat, Calendar, Package, Truck, ShoppingCart } from 'lucide-react';
+import { ChefHat, Calendar, Package, Truck, ShoppingCart, ClipboardList } from 'lucide-react';
 
 export default function Sidebar({ activeView, onNavigate, cartCount }) {
     // Definición declarativa de los ítems de navegación.
     // Agregar una nueva sección solo requiere agregar una entrada aquí.
     const navItems = [
         { id: 'recipes', icon: ChefHat, label: 'Recipes' },
+        { id: 'menus', icon: ClipboardList, label: 'Menus' },
         { id: 'calendar', icon: Calendar, label: 'Calendar' },
         { id: 'inventory', icon: Package, label: 'Inventory' },
         { id: 'suppliers', icon: Truck, label: 'Suppliers' },
@@ -26,13 +27,26 @@ export default function Sidebar({ activeView, onNavigate, cartCount }) {
     return (
         <aside className="fixed left-0 top-0 h-full flex flex-col items-center py-8 gap-3 z-40"
             style={{ width: 80, background: 'rgba(61,26,120,0.92)', backdropFilter: 'blur(20px)' }}>
-            {/* Logo */}
-            <div className="flex flex-col items-center mb-6">
+            {/* Logo — click to go back to Dashboard */}
+            <div className="flex flex-col items-center mb-6"
+                onClick={() => onNavigate('dashboard')}
+                style={{ cursor: 'pointer', transition: 'transform 0.2s' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                title="Back to Dashboard"
+            >
                 <div className="rounded-2xl flex items-center justify-center mb-1"
-                    style={{ width: 48, height: 48, background: 'linear-gradient(135deg,#4ecdc4,#38b2ac)' }}>
+                    style={{
+                        width: 48, height: 48,
+                        background: activeView === 'dashboard'
+                            ? 'linear-gradient(135deg,#4ecdc4,#38b2ac)'
+                            : 'linear-gradient(135deg,#4ecdc4,#38b2ac)',
+                        boxShadow: activeView === 'dashboard' ? '0 0 12px rgba(78,205,196,0.5)' : 'none',
+                        transition: 'box-shadow 0.2s',
+                    }}>
                     <ChefHat size={26} color="white" />
                 </div>
-                <span style={{ color: '#d4c3f0', fontSize: 9, fontWeight: 700, letterSpacing: 1 }}>KitchenCalc</span>
+                <span style={{ color: activeView === 'dashboard' ? '#4ecdc4' : '#d4c3f0', fontSize: 9, fontWeight: 700, letterSpacing: 1, transition: 'color 0.2s' }}>KitchenCalc</span>
             </div>
 
             {navItems.map(({ id, icon: Icon, label, badge }) => (

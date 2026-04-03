@@ -1,21 +1,20 @@
 /**
  * @file CalendarView.jsx
- * @description Calendario de producción con planificación de comidas por día.
+ * @description Production calendar with daily meal planning.
  *
- * Sub-componentes internos:
- *  - MealBadge    : Chip compacto que muestra una comida (slot + nombre).
- *  - AddMealModal : Modal para agregar una receta a un slot del día.
- *  - DayPanel     : Panel lateral deslizante con el detalle de las comidas del día.
- *
- * Estado local:
- *  - meals       : { [dateKey: string]: MealEntry[] } donde dateKey = 'YYYY-MM-DD'.
- *  - selectedDay : { key, label } del día actualmente abierto en el panel.
+ * Supports adding both individual RECIPES and full MENUS to calendar days.
+ * When a menu is added, all its recipes are grouped visually and marked
+ * with a distinct "MENU" badge.
  *
  * Props:
- *  - recipes {Recipe[]} - Lista de recetas disponibles para planificar.
+ *  - recipes {Recipe[]} - Available recipes.
+ *  - menus   {Menu[]}   - Available menus (groups of recipes).
  */
 import { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Plus, X, UtensilsCrossed, Sun, Coffee, Moon, Apple } from 'lucide-react';
+import {
+    ChevronLeft, ChevronRight, Plus, X, UtensilsCrossed,
+    Sun, Coffee, Moon, Apple, ClipboardList, ChevronDown, ChevronUp,
+} from 'lucide-react';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -28,54 +27,66 @@ const MEAL_SLOTS = [
     { key: 'snack', label: 'Snack', icon: Apple, color: '#10b981' },
 ];
 
-// dateKey: "YYYY-MM-DD"
 const toKey = (year, month, day) =>
     `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-// ── Meal slot badge ───────────────────────────────────────────────────────────
-function MealBadge({ slot, recipe, onRemove, compact = false }) {
+// ── Meal badge (compact for calendar cells) ──────────────────────────────────
+function MealBadge({ slot, recipe, isMenu, compact = false }) {
     const SlotIcon = slot.icon;
     return (
         <div style={{
             display: 'flex', alignItems: 'center', gap: compact ? 3 : 5,
-            background: `${slot.color}18`, borderRadius: compact ? 5 : 8,
+            background: isMenu ? 'rgba(78,205,196,0.12)' : `${slot.color}18`,
+            borderRadius: compact ? 5 : 8,
             padding: compact ? '1px 5px' : '4px 8px',
-            border: `1px solid ${slot.color}33`,
+            border: isMenu ? '1px solid rgba(78,205,196,0.3)' : `1px solid ${slot.color}33`,
             marginBottom: compact ? 2 : 4,
             minWidth: 0,
         }}>
-            <SlotIcon size={compact ? 9 : 11} color={slot.color} style={{ flexShrink: 0 }} />
+            {isMenu ? (
+                <ClipboardList size={compact ? 9 : 11} color="#4ecdc4" style={{ flexShrink: 0 }} />
+            ) : (
+                <SlotIcon size={compact ? 9 : 11} color={slot.color} style={{ flexShrink: 0 }} />
+            )}
             <span style={{
-                fontSize: compact ? 9 : 11, fontWeight: 600, color: slot.color,
+                fontSize: compact ? 9 : 11, fontWeight: 600,
+                color: isMenu ? '#4ecdc4' : slot.color,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
             }}>
-                {recipe.name}
+                {recipe?.name ?? 'Menu'}
             </span>
-            {onRemove && (
-                <button onClick={onRemove} style={{
-                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                    display: 'flex', alignItems: 'center', color: slot.color, opacity: 0.6, flexShrink: 0,
-                }}>
-                    <X size={compact ? 9 : 11} />
-                </button>
-            )}
         </div>
     );
 }
 
-// ── Add Meal Modal ────────────────────────────────────────────────────────────
-function AddMealModal({ dateLabel, recipes, existingMeals, onAdd, onClose }) {
+// ── Add Meal Modal (supports both Recipes and Menus) ─────────────────────────
+function AddMealModal({ dateLabel, recipes, menus = [], onAdd, onClose }) {
     const [selectedSlot, setSelectedSlot] = useState('lunch');
+    const [mode, setMode] = useState('recipe'); // 'recipe' | 'menu'
     const [selectedRecipe, setSelectedRecipe] = useState(recipes[0]?.id ?? '');
+    const [selectedMenu, setSelectedMenu] = useState(menus[0]?.id ?? '');
     const [note, setNote] = useState('');
 
     const handleAdd = () => {
-        if (!selectedRecipe) return;
-        const recipe = recipes.find(r => String(r.id) === String(selectedRecipe));
-        if (!recipe) return;
-        onAdd({ slotKey: selectedSlot, recipe, note: note.trim() });
+        if (mode === 'recipe') {
+            if (!selectedRecipe) return;
+            const recipe = recipes.find(r => String(r.id) === String(selectedRecipe));
+            if (!recipe) return;
+            onAdd({ type: 'recipe', slotKey: selectedSlot, recipe, note: note.trim() });
+        } else {
+            if (!selectedMenu) return;
+            const menu = menus.find(m => m.id === selectedMenu);
+            if (!menu) return;
+            const menuRecipes = menu.recipeIds.map(rid => recipes.find(r => r.id === rid)).filter(Boolean);
+            onAdd({ type: 'menu', slotKey: selectedSlot, menu, menuRecipes, note: note.trim() });
+        }
         setNote('');
     };
+
+    const currentMenu = menus.find(m => m.id === selectedMenu);
+    const currentMenuRecipes = currentMenu
+        ? currentMenu.recipeIds.map(rid => recipes.find(r => r.id === rid)).filter(Boolean)
+        : [];
 
     const inputSx = {
         padding: '8px 11px', borderRadius: 9, fontSize: 13,
@@ -89,18 +100,45 @@ function AddMealModal({ dateLabel, recipes, existingMeals, onAdd, onClose }) {
             backdropFilter: 'blur(6px)', zIndex: 200,
             display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
         }}>
-            <div className="glass-card fade-in-up" style={{ width: '100%', maxWidth: 460, padding: 28 }}>
+            <div className="glass-card fade-in-up" style={{ width: '100%', maxWidth: 500, padding: 28 }}>
                 {/* Header */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
                     <div>
                         <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#3d1a78' }}>
-                            🍽️ Add Meal
+                            🍽️ Add to Calendar
                         </h2>
                         <p style={{ margin: 0, fontSize: 12, color: '#9b6dca' }}>{dateLabel}</p>
                     </div>
                     <button onClick={onClose} style={{ background: 'rgba(107,63,160,0.1)', border: 'none', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <X size={16} color="#6b3fa0" />
                     </button>
+                </div>
+
+                {/* Type toggle: Recipe vs Menu */}
+                <div style={{ marginBottom: 16 }}>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: '#6b3fa0', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>What to add</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <button onClick={() => setMode('recipe')} style={{
+                            padding: '12px 10px', borderRadius: 12,
+                            border: `2px solid ${mode === 'recipe' ? '#6b3fa0' : 'transparent'}`,
+                            background: mode === 'recipe' ? 'linear-gradient(135deg,rgba(107,63,160,0.12),rgba(107,63,160,0.06))' : 'rgba(255,255,255,0.5)',
+                            cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, transition: 'all 0.2s',
+                        }}>
+                            <span style={{ fontSize: 20 }}>🍳</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#6b3fa0' }}>Single Recipe</span>
+                            <span style={{ fontSize: 10, color: '#9b6dca' }}>Add one dish</span>
+                        </button>
+                        <button onClick={() => setMode('menu')} style={{
+                            padding: '12px 10px', borderRadius: 12,
+                            border: `2px solid ${mode === 'menu' ? '#4ecdc4' : 'transparent'}`,
+                            background: mode === 'menu' ? 'linear-gradient(135deg,rgba(78,205,196,0.12),rgba(78,205,196,0.06))' : 'rgba(255,255,255,0.5)',
+                            cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, transition: 'all 0.2s',
+                        }}>
+                            <span style={{ fontSize: 20 }}>📋</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#4ecdc4' }}>Full Menu</span>
+                            <span style={{ fontSize: 10, color: '#9b6dca' }}>Add multiple recipes</span>
+                        </button>
+                    </div>
                 </div>
 
                 {/* Meal slot selector */}
@@ -125,19 +163,65 @@ function AddMealModal({ dateLabel, recipes, existingMeals, onAdd, onClose }) {
                     </div>
                 </div>
 
-                {/* Recipe selector */}
+                {/* Recipe / Menu selector */}
                 <div style={{ marginBottom: 14 }}>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: '#6b3fa0', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Recipe</label>
-                    {recipes.length === 0 ? (
-                        <div style={{ fontSize: 13, color: '#9b6dca', padding: '10px', background: 'rgba(107,63,160,0.05)', borderRadius: 9 }}>
-                            No recipes yet. Create some in the Recipes section first.
-                        </div>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: '#6b3fa0', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+                        {mode === 'recipe' ? 'Recipe' : 'Menu'}
+                    </label>
+
+                    {mode === 'recipe' ? (
+                        recipes.length === 0 ? (
+                            <div style={{ fontSize: 13, color: '#9b6dca', padding: '10px', background: 'rgba(107,63,160,0.05)', borderRadius: 9 }}>
+                                No recipes yet. Create some in the Recipes section first.
+                            </div>
+                        ) : (
+                            <select value={selectedRecipe} onChange={e => setSelectedRecipe(e.target.value)} style={inputSx}>
+                                {recipes.map(r => (
+                                    <option key={r.id} value={r.id}>{r.image} {r.name} — {r.category}</option>
+                                ))}
+                            </select>
+                        )
                     ) : (
-                        <select value={selectedRecipe} onChange={e => setSelectedRecipe(e.target.value)} style={inputSx}>
-                            {recipes.map(r => (
-                                <option key={r.id} value={r.id}>{r.image} {r.name} — {r.category}</option>
-                            ))}
-                        </select>
+                        menus.length === 0 ? (
+                            <div style={{ fontSize: 13, color: '#9b6dca', padding: '10px', background: 'rgba(78,205,196,0.05)', borderRadius: 9 }}>
+                                No menus yet. Create some in the Menus section first.
+                            </div>
+                        ) : (
+                            <>
+                                <select value={selectedMenu} onChange={e => setSelectedMenu(e.target.value)} style={{ ...inputSx, borderColor: 'rgba(78,205,196,0.4)' }}>
+                                    {menus.map(m => {
+                                        const mRecipes = m.recipeIds.map(rid => recipes.find(r => r.id === rid)).filter(Boolean);
+                                        return (
+                                            <option key={m.id} value={m.id}>
+                                                {m.image} {m.name} — {mRecipes.length} recipe{mRecipes.length !== 1 ? 's' : ''}
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                                {/* Menu preview */}
+                                {currentMenu && (
+                                    <div style={{
+                                        marginTop: 10, background: 'linear-gradient(135deg,rgba(78,205,196,0.08),rgba(107,63,160,0.05))',
+                                        borderRadius: 10, padding: 12, border: '1px solid rgba(78,205,196,0.2)',
+                                    }}>
+                                        <div style={{ fontSize: 12, fontWeight: 700, color: '#3d1a78', marginBottom: 6 }}>
+                                            {currentMenu.image} {currentMenu.name}
+                                        </div>
+                                        <div style={{ fontSize: 11, color: '#9b6dca', marginBottom: 8 }}>{currentMenu.description}</div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                            {currentMenuRecipes.map((r, idx) => (
+                                                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#374151' }}>
+                                                    <span style={{ fontSize: 10, color: '#9b6dca', fontWeight: 700 }}>#{idx + 1}</span>
+                                                    <span>{r.image}</span>
+                                                    <span style={{ fontWeight: 500 }}>{r.name}</span>
+                                                    <span style={{ fontSize: 10, color: '#9b6dca' }}>· {r.category}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        )
                     )}
                 </div>
 
@@ -152,11 +236,11 @@ function AddMealModal({ dateLabel, recipes, existingMeals, onAdd, onClose }) {
                     <button onClick={onClose} className="btn-ghost">Cancel</button>
                     <button
                         onClick={handleAdd}
-                        disabled={!selectedRecipe || recipes.length === 0}
-                        className="btn-primary"
-                        style={{ opacity: (!selectedRecipe || recipes.length === 0) ? 0.5 : 1 }}
+                        disabled={(mode === 'recipe' && (!selectedRecipe || recipes.length === 0)) || (mode === 'menu' && (!selectedMenu || menus.length === 0))}
+                        className={mode === 'menu' ? 'btn-teal' : 'btn-primary'}
+                        style={{ opacity: ((mode === 'recipe' && (!selectedRecipe || recipes.length === 0)) || (mode === 'menu' && (!selectedMenu || menus.length === 0))) ? 0.5 : 1 }}
                     >
-                        <Plus size={15} /> Add to Calendar
+                        <Plus size={15} /> {mode === 'menu' ? 'Add Menu' : 'Add Recipe'}
                     </button>
                 </div>
             </div>
@@ -165,14 +249,17 @@ function AddMealModal({ dateLabel, recipes, existingMeals, onAdd, onClose }) {
 }
 
 // ── Day Detail Panel ──────────────────────────────────────────────────────────
-function DayPanel({ dateKey, dateLabel, meals, recipes, onAdd, onRemove, onClose }) {
+function DayPanel({ dateKey, dateLabel, meals, recipes, menus, onAdd, onRemove, onClose }) {
     const [showAddModal, setShowAddModal] = useState(false);
+    const [expandedMenus, setExpandedMenus] = useState({});
     const totalMeals = meals.length;
+
+    const toggleMenu = (id) => setExpandedMenus(prev => ({ ...prev, [id]: !prev[id] }));
 
     return (
         <>
             <div style={{
-                position: 'fixed', top: 0, right: 0, bottom: 0, width: 320,
+                position: 'fixed', top: 0, right: 0, bottom: 0, width: 340,
                 background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(20px)',
                 borderLeft: '1px solid rgba(107,63,160,0.15)',
                 boxShadow: '-8px 0 32px rgba(61,26,120,0.12)',
@@ -188,7 +275,7 @@ function DayPanel({ dateKey, dateLabel, meals, recipes, onAdd, onRemove, onClose
                         </button>
                     </div>
                     <div style={{ fontSize: 12, color: '#9b6dca' }}>
-                        {totalMeals === 0 ? 'No meals planned' : `${totalMeals} meal${totalMeals !== 1 ? 's' : ''} planned`}
+                        {totalMeals === 0 ? 'No meals planned' : `${totalMeals} item${totalMeals !== 1 ? 's' : ''} planned`}
                     </div>
                 </div>
 
@@ -218,31 +305,95 @@ function DayPanel({ dateKey, dateLabel, meals, recipes, onAdd, onRemove, onClose
                                         Nothing planned
                                     </div>
                                 ) : (
-                                    slotMeals.map((meal, i) => (
-                                        <div key={i} style={{
+                                    slotMeals.map((meal) => (
+                                        <div key={meal.id} style={{
                                             marginLeft: 36, marginBottom: 8,
-                                            background: 'rgba(255,255,255,0.7)', borderRadius: 10,
-                                            padding: '10px 12px', border: `1px solid ${slot.color}22`,
-                                            borderLeft: `3px solid ${slot.color}`,
+                                            background: meal.type === 'menu'
+                                                ? 'linear-gradient(135deg,rgba(78,205,196,0.06),rgba(255,255,255,0.7))'
+                                                : 'rgba(255,255,255,0.7)',
+                                            borderRadius: 10,
+                                            padding: '10px 12px',
+                                            border: meal.type === 'menu'
+                                                ? '1px solid rgba(78,205,196,0.25)'
+                                                : `1px solid ${slot.color}22`,
+                                            borderLeft: meal.type === 'menu'
+                                                ? '3px solid #4ecdc4'
+                                                : `3px solid ${slot.color}`,
                                         }}>
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                                                <div style={{ fontWeight: 700, fontSize: 13, color: '#3d1a78', flex: 1 }}>
-                                                    {meal.recipe.image} {meal.recipe.name}
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    {meal.type === 'menu' ? (
+                                                        <div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                                <span style={{ fontWeight: 700, fontSize: 13, color: '#3d1a78' }}>
+                                                                    {meal.menu.image} {meal.menu.name}
+                                                                </span>
+                                                                <span style={{
+                                                                    background: 'linear-gradient(135deg,#4ecdc4,#38b2ac)',
+                                                                    color: 'white', fontSize: 9, fontWeight: 700,
+                                                                    padding: '1px 6px', borderRadius: 10,
+                                                                }}>MENU</span>
+                                                            </div>
+                                                            <div style={{ fontSize: 11, color: '#9b6dca', marginTop: 2 }}>
+                                                                {meal.menuRecipes?.length ?? 0} recipe{(meal.menuRecipes?.length ?? 0) !== 1 ? 's' : ''}
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div>
+                                                            <div style={{ fontWeight: 700, fontSize: 13, color: '#3d1a78' }}>
+                                                                {meal.recipe.image} {meal.recipe.name}
+                                                            </div>
+                                                            <div style={{ fontSize: 11, color: '#9b6dca', marginTop: 2 }}>
+                                                                {meal.recipe.category}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <button onClick={() => onRemove(meal.id)} style={{
-                                                    background: 'rgba(239,68,68,0.1)', border: 'none', borderRadius: 7,
-                                                    width: 26, height: 26, cursor: 'pointer',
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    flexShrink: 0,
+                                                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                                                    {meal.type === 'menu' && (
+                                                        <button onClick={() => toggleMenu(meal.id)} style={{
+                                                            background: 'rgba(78,205,196,0.1)', border: 'none', borderRadius: 7,
+                                                            width: 26, height: 26, cursor: 'pointer',
+                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                        }}>
+                                                            {expandedMenus[meal.id]
+                                                                ? <ChevronUp size={12} color="#4ecdc4" />
+                                                                : <ChevronDown size={12} color="#4ecdc4" />}
+                                                        </button>
+                                                    )}
+                                                    <button onClick={() => onRemove(meal.id)} style={{
+                                                        background: 'rgba(239,68,68,0.1)', border: 'none', borderRadius: 7,
+                                                        width: 26, height: 26, cursor: 'pointer',
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                        flexShrink: 0,
+                                                    }}>
+                                                        <X size={12} color="#ef4444" />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Menu expanded recipes */}
+                                            {meal.type === 'menu' && expandedMenus[meal.id] && (
+                                                <div style={{
+                                                    marginTop: 8, paddingTop: 8,
+                                                    borderTop: '1px solid rgba(78,205,196,0.15)',
                                                 }}>
-                                                    <X size={12} color="#ef4444" />
-                                                </button>
-                                            </div>
-                                            <div style={{ fontSize: 11, color: '#9b6dca', marginTop: 2 }}>
-                                                {meal.recipe.category}
-                                            </div>
+                                                    {(meal.menuRecipes ?? []).map((r, idx) => (
+                                                        <div key={r.id} style={{
+                                                            display: 'flex', alignItems: 'center', gap: 6,
+                                                            padding: '4px 0', fontSize: 12, color: '#374151',
+                                                        }}>
+                                                            <span style={{ fontSize: 10, color: '#9b6dca', fontWeight: 700 }}>#{idx + 1}</span>
+                                                            <span>{r.image}</span>
+                                                            <span style={{ fontWeight: 500, flex: 1 }}>{r.name}</span>
+                                                            <span style={{ fontSize: 10, color: '#9b6dca' }}>{r.category}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
                                             {meal.note && (
-                                                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4, fontStyle: 'italic', background: 'rgba(107,63,160,0.05)', borderRadius: 6, padding: '3px 7px' }}>
+                                                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, fontStyle: 'italic', background: 'rgba(107,63,160,0.05)', borderRadius: 6, padding: '3px 7px' }}>
                                                     📝 {meal.note}
                                                 </div>
                                             )}
@@ -257,7 +408,7 @@ function DayPanel({ dateKey, dateLabel, meals, recipes, onAdd, onRemove, onClose
                 {/* Add button */}
                 <div style={{ padding: 16, borderTop: '1px solid rgba(107,63,160,0.1)' }}>
                     <button onClick={() => setShowAddModal(true)} className="btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
-                        <Plus size={15} /> Add Meal
+                        <Plus size={15} /> Add Meal or Menu
                     </button>
                 </div>
             </div>
@@ -273,7 +424,7 @@ function DayPanel({ dateKey, dateLabel, meals, recipes, onAdd, onRemove, onClose
                 <AddMealModal
                     dateLabel={dateLabel}
                     recipes={recipes}
-                    existingMeals={meals}
+                    menus={menus}
                     onAdd={(entry) => { onAdd(dateKey, entry); setShowAddModal(false); }}
                     onClose={() => setShowAddModal(false)}
                 />
@@ -283,13 +434,13 @@ function DayPanel({ dateKey, dateLabel, meals, recipes, onAdd, onRemove, onClose
 }
 
 // ── MAIN CalendarView ─────────────────────────────────────────────────────────
-export default function CalendarView({ recipes = [] }) {
+export default function CalendarView({ recipes = [], menus = [] }) {
     const today = new Date();
     const [month, setMonth] = useState(today.getMonth());
     const [year, setYear] = useState(today.getFullYear());
-    const [selectedDay, setSelectedDay] = useState(null); // {key, label}
+    const [selectedDay, setSelectedDay] = useState(null);
 
-    // meals: { [dateKey]: [{id, slotKey, recipe, note}] }
+    // meals: { [dateKey]: [{id, type, slotKey, recipe?, menu?, menuRecipes?, note}] }
     const [meals, setMeals] = useState({});
 
     const prev = () => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); };
@@ -303,19 +454,14 @@ export default function CalendarView({ recipes = [] }) {
         .concat(Array.from({ length: daysInMonth }, (_, i) => i + 1));
     while (cells.length % 7 !== 0) cells.push(null);
 
-    // Meal counts per day (for dot indicators)
-    const mealCountFor = (day) => {
-        if (!day) return 0;
-        const key = toKey(year, month, day);
-        return (meals[key] ?? []).length;
-    };
+    const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
 
-    const addMeal = (dateKey, { slotKey, recipe, note }) => {
+    const addMeal = (dateKey, entry) => {
         setMeals(prev => ({
             ...prev,
             [dateKey]: [
                 ...(prev[dateKey] ?? []),
-                { id: `meal-${Date.now()}-${Math.random()}`, slotKey, recipe, note },
+                { id: `meal-${Date.now()}-${Math.random()}`, ...entry },
             ],
         }));
     };
@@ -328,25 +474,36 @@ export default function CalendarView({ recipes = [] }) {
     };
 
     // Stats for month
-    const totalMealsThisMonth = useMemo(() => {
-        return Object.entries(meals).filter(([k]) => k.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`))
+    const totalItemsThisMonth = useMemo(() => {
+        return Object.entries(meals).filter(([k]) => k.startsWith(monthPrefix))
             .reduce((acc, [, arr]) => acc + arr.length, 0);
-    }, [meals, year, month]);
+    }, [meals, monthPrefix]);
 
     const plannedDaysCount = useMemo(() => {
         return Object.entries(meals).filter(([k]) =>
-            k.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`) && meals[k].length > 0
+            k.startsWith(monthPrefix) && meals[k].length > 0
         ).length;
-    }, [meals, year, month]);
+    }, [meals, monthPrefix]);
+
+    const menusPlannedCount = useMemo(() => {
+        return Object.entries(meals).filter(([k]) => k.startsWith(monthPrefix))
+            .reduce((acc, [, arr]) => acc + arr.filter(m => m.type === 'menu').length, 0);
+    }, [meals, monthPrefix]);
 
     const uniqueRecipesCount = useMemo(() => {
         const ids = new Set();
         Object.entries(meals).forEach(([k, arr]) => {
-            if (k.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`))
-                arr.forEach(m => ids.add(m.recipe.id));
+            if (k.startsWith(monthPrefix))
+                arr.forEach(m => {
+                    if (m.type === 'menu' && m.menuRecipes) {
+                        m.menuRecipes.forEach(r => ids.add(r.id));
+                    } else if (m.recipe) {
+                        ids.add(m.recipe.id);
+                    }
+                });
         });
         return ids.size;
-    }, [meals, year, month]);
+    }, [meals, monthPrefix]);
 
     const openDay = (day) => {
         if (!day) return;
@@ -364,7 +521,7 @@ export default function CalendarView({ recipes = [] }) {
                         📅 Production Calendar
                     </h1>
                     <p style={{ fontSize: 13, color: '#9b6dca', margin: '4px 0 0' }}>
-                        Plan your daily meals and production schedule
+                        Plan daily meals with individual recipes or full menus
                     </p>
                 </div>
                 <button onClick={goToday} className="btn-ghost" style={{ fontSize: 13 }}>
@@ -373,10 +530,11 @@ export default function CalendarView({ recipes = [] }) {
             </div>
 
             {/* Stats row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 24 }}>
                 {[
-                    { label: 'Meals This Month', value: totalMealsThisMonth, color: '#6b3fa0', icon: '🍽️' },
+                    { label: 'Items This Month', value: totalItemsThisMonth, color: '#6b3fa0', icon: '🍽️' },
                     { label: 'Days Planned', value: plannedDaysCount, color: '#4ecdc4', icon: '📅' },
+                    { label: 'Menus Planned', value: menusPlannedCount, color: '#38b2ac', icon: '📋' },
                     { label: 'Unique Recipes', value: uniqueRecipesCount, color: '#f59e0b', icon: '👨‍🍳' },
                 ].map(({ label, value, color, icon }) => (
                     <div key={label} className="glass-card" style={{ padding: 16 }}>
@@ -387,8 +545,8 @@ export default function CalendarView({ recipes = [] }) {
                 ))}
             </div>
 
-            {/* Calendar */}
-            <div className="glass-card" style={{ padding: 24, marginRight: selectedDay ? 340 : 0, transition: 'margin 0.3s ease' }}>
+            {/* Calendar grid */}
+            <div className="glass-card" style={{ padding: 24, marginRight: selectedDay ? 360 : 0, transition: 'margin 0.3s ease' }}>
                 {/* Month nav */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
                     <button onClick={prev} style={{ background: 'rgba(107,63,160,0.1)', border: 'none', borderRadius: 10, width: 36, height: 36, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -419,8 +577,8 @@ export default function CalendarView({ recipes = [] }) {
                         const isSelected = key && selectedDay?.key === key;
                         const dayMeals = key ? (meals[key] ?? []) : [];
                         const count = dayMeals.length;
+                        const hasMenu = dayMeals.some(m => m.type === 'menu');
 
-                        // Get up to 2 meal badges to show in cell
                         const visibleMeals = dayMeals.slice(0, 2);
                         const overflow = Math.max(0, count - 2);
 
@@ -437,9 +595,11 @@ export default function CalendarView({ recipes = [] }) {
                                             : day ? 'rgba(255,255,255,0.5)' : 'transparent',
                                     border: isSelected
                                         ? '2px solid rgba(107,63,160,0.5)'
-                                        : isToday
-                                            ? '1.5px solid rgba(107,63,160,0.3)'
-                                            : '1px solid transparent',
+                                        : hasMenu
+                                            ? '1.5px solid rgba(78,205,196,0.4)'
+                                            : isToday
+                                                ? '1.5px solid rgba(107,63,160,0.3)'
+                                                : '1px solid transparent',
                                     cursor: day ? 'pointer' : 'default',
                                     transition: 'all 0.15s',
                                     position: 'relative',
@@ -477,7 +637,13 @@ export default function CalendarView({ recipes = [] }) {
                                             {visibleMeals.map((m) => {
                                                 const slot = MEAL_SLOTS.find(s => s.key === m.slotKey) ?? MEAL_SLOTS[0];
                                                 return (
-                                                    <MealBadge key={m.id} slot={slot} recipe={m.recipe} compact />
+                                                    <MealBadge
+                                                        key={m.id}
+                                                        slot={slot}
+                                                        recipe={m.type === 'menu' ? m.menu : m.recipe}
+                                                        isMenu={m.type === 'menu'}
+                                                        compact
+                                                    />
                                                 );
                                             })}
                                             {overflow > 0 && (
@@ -487,7 +653,7 @@ export default function CalendarView({ recipes = [] }) {
                                             )}
                                         </div>
 
-                                        {/* Add meal pulse (only if no meals and hovered) */}
+                                        {/* Add meal indicator */}
                                         {count === 0 && (
                                             <div style={{
                                                 position: 'absolute', bottom: 5, right: 5,
@@ -516,9 +682,13 @@ export default function CalendarView({ recipes = [] }) {
                             </div>
                         );
                     })}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <ClipboardList size={12} color="#4ecdc4" />
+                        <span style={{ fontSize: 11, color: '#4ecdc4', fontWeight: 600 }}>Menu</span>
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginLeft: 'auto' }}>
                         <UtensilsCrossed size={12} color="#9b6dca" />
-                        <span style={{ fontSize: 11, color: '#9b6dca' }}>Click a day to plan meals</span>
+                        <span style={{ fontSize: 11, color: '#9b6dca' }}>Click a day to plan</span>
                     </div>
                 </div>
             </div>
@@ -530,6 +700,7 @@ export default function CalendarView({ recipes = [] }) {
                     dateLabel={selectedDay.label}
                     meals={meals[selectedDay.key] ?? []}
                     recipes={recipes}
+                    menus={menus}
                     onAdd={addMeal}
                     onRemove={(mealId) => removeMeal(selectedDay.key, mealId)}
                     onClose={() => setSelectedDay(null)}

@@ -212,6 +212,36 @@ export const suppliers = [
     { id: 'FreshFarm', name: 'FreshFarm', contact: 'freshfarm.com', email: 'orders@freshfarm.com', phone: '+1 888 374 2764', color: '#10b981', notes: 'Local farm delivery, Mon-Fri' },
 ];
 
+// ── MENUS ────────────────────────────────────────────────────────────────────
+// A menu groups multiple recipes. All diners eat every recipe in the menu.
+// The requisition engine consolidates shared ingredients across recipes.
+export const menus = [
+    {
+        id: 'menu-001',
+        name: 'Executive Lunch',
+        description: 'Complete lunch menu for corporate events',
+        image: '🍱',
+        recipeIds: [3, 1],  // Caesar Salad → Chicken Piccata
+        createdAt: '2026-03-15',
+    },
+    {
+        id: 'menu-002',
+        name: 'Kids Party Pack',
+        description: 'Fun meal combo for children\'s parties',
+        image: '🎉',
+        recipeIds: [2, 3],  // Nuggets → Caesar Salad
+        createdAt: '2026-03-20',
+    },
+    {
+        id: 'menu-003',
+        name: 'Full Course Dinner',
+        description: 'Three-course dinner with starter, main and sides',
+        image: '🌟',
+        recipeIds: [3, 1, 2],  // Caesar Salad → Chicken Piccata → Nuggets
+        createdAt: '2026-03-25',
+    },
+];
+
 // ── GROUPS ───────────────────────────────────────────────────────────────────
 export const defaultGroups = [
     { id: 'A', label: 'Group A', sublabel: 'Kids', color: '#4ecdc4', count: 0 },
@@ -249,4 +279,73 @@ export function resolveIngredients(recipe, catalog) {
             return { ...ing, portionByGroup: ref.portionByGroup };
         })
         .filter(Boolean);
+}
+
+// ── MENU REQUISITION ENGINE ──────────────────────────────────────────────────
+/**
+ * Calculates a consolidated requisition for an entire menu.
+ *
+ * Algorithm:
+ *  1. Resolve all ingredients from every recipe in the menu.
+ *  2. Group by ingredientId → sum per-group portions across recipes.
+ *  3. Run standard calcRequisition on each consolidated ingredient.
+ *
+ * This ensures shared ingredients (e.g. Chicken Breast used in two recipes)
+ * produce a single, combined demand instead of separate entries.
+ *
+ * @param {object}   menu      - Menu object with recipeIds[].
+ * @param {object[]} allRecipes - Full recipes array.
+ * @param {object[]} catalog   - Ingredient catalog.
+ * @param {object[]} groups    - Groups array with counts.
+ * @returns {{ consolidated: object[], byRecipe: object[] }}
+ */
+export function calcMenuRequisition(menu, allRecipes, catalog, groups) {
+    // Map of ingredientId → { catalogEntry, portionByGroup (accumulated), usedInRecipes[] }
+    const ingredientMap = new Map();
+
+    const menuRecipes = menu.recipeIds
+        .map(rid => allRecipes.find(r => r.id === rid))
+        .filter(Boolean);
+
+    // Per-recipe breakdown (for UI display)
+    const byRecipe = menuRecipes.map(recipe => {
+        const resolved = resolveIngredients(recipe, catalog);
+        return {
+            recipe,
+            ingredients: resolved,
+            results: resolved.map(ing => ({ ...ing, calc: calcRequisition(ing, groups) })),
+        };
+    });
+
+    // Consolidate: group same ingredients, sum portions
+    menuRecipes.forEach(recipe => {
+        recipe.ingredients.forEach(ref => {
+            const cat = catalog.find(c => c.id === ref.ingredientId);
+            if (!cat) return;
+
+            if (ingredientMap.has(ref.ingredientId)) {
+                const entry = ingredientMap.get(ref.ingredientId);
+                // Sum portions per group
+                Object.keys(ref.portionByGroup).forEach(gId => {
+                    entry.portionByGroup[gId] = (entry.portionByGroup[gId] || 0) + (ref.portionByGroup[gId] || 0);
+                });
+                entry.usedInRecipes.push(recipe.name);
+            } else {
+                ingredientMap.set(ref.ingredientId, {
+                    ...cat,
+                    portionByGroup: { ...ref.portionByGroup },
+                    usedInRecipes: [recipe.name],
+                });
+            }
+        });
+    });
+
+    // Run calcRequisition on each consolidated ingredient
+    const consolidated = Array.from(ingredientMap.values()).map(ing => ({
+        ...ing,
+        calc: calcRequisition(ing, groups),
+        isShared: ing.usedInRecipes.length > 1,
+    }));
+
+    return { consolidated, byRecipe };
 }
