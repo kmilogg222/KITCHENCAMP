@@ -453,20 +453,20 @@ export default function CalendarView() {
     const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
 
     const addMeal = (dateKey, entry) => {
-        setMeals(prev => ({
-            ...prev,
+        setMeals({
+            ...meals,
             [dateKey]: [
-                ...(prev[dateKey] ?? []),
+                ...(meals[dateKey] ?? []),
                 { id: `meal-${Date.now()}-${Math.random()}`, ...entry },
             ],
-        }));
+        });
     };
 
     const removeMeal = (dateKey, mealId) => {
-        setMeals(prev => ({
-            ...prev,
-            [dateKey]: (prev[dateKey] ?? []).filter(m => m.id !== mealId),
-        }));
+        setMeals({
+            ...meals,
+            [dateKey]: (meals[dateKey] ?? []).filter(m => m.id !== mealId),
+        });
     };
 
     // Stats for month
