@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useState as useStateAlias } from 'react';
 import { Search, Zap, RefreshCw, ShoppingBasket, Plus, Pencil, Trash2 } from 'lucide-react';
 import { defaultGroups, calcRequisition, resolveIngredients } from '../data/mockData';
 import StarRating from '../components/StarRating';
