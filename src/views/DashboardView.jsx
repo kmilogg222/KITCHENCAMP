@@ -16,8 +16,10 @@
  */
 import { Search, Sparkles, TrendingUp, Clock, ChefHat, Plus, ClipboardList } from 'lucide-react';
 import StarRating from '../components/StarRating';
+import { useKitchen } from '../context/KitchenContext';
 
-export default function DashboardView({ recipes, menus = [], onSelectRecipe, onSelectMenu, onNavigate, onCreateNew, onCreateNewMenu }) {
+export default function DashboardView({ onSelectRecipe, onSelectMenu, onNavigate, onCreateNew, onCreateNewMenu }) {
+    const { recipes, menus } = useKitchen();
     return (
         <div className="fade-in-up">
             {/* Header */}

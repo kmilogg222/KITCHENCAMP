@@ -10,7 +10,7 @@
  *  - Izquierda: lista de menús con búsqueda
  *  - Derecha: detalle del menú seleccionado + requisición consolidada
  */
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
     Search, Zap, RefreshCw, ShoppingBasket, Plus,
     Pencil, Trash2, ChefHat, Layers,
@@ -90,13 +90,14 @@ function ConsolidatedIngredientRow({ item, onAddToCart, alreadyInCart }) {
     );
 }
 
+import { useKitchen } from '../context/KitchenContext';
+
 // ── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function MenusView({
-    menus, recipes, ingredientsCatalog,
     selectedMenu, setSelectedMenu,
-    cart, onAddToCart,
     onCreateNew, onEditMenu, onDeleteMenu,
 }) {
+    const { menus, recipes, ingredients: ingredientsCatalog, cart, addToCart: onAddToCart } = useKitchen();
     const [search, setSearch] = useState('');
     const [groups, setGroups] = useState(defaultGroups);
     const [generated, setGenerated] = useState(false);
@@ -122,14 +123,14 @@ export default function MenusView({
     };
 
     // Get recipes that belong to the selected menu
-    const menuRecipes = selectedMenu
+    const menuRecipes = useMemo(() => selectedMenu
         ? selectedMenu.recipeIds.map(rid => recipes.find(r => r.id === rid)).filter(Boolean)
-        : [];
+        : [], [selectedMenu, recipes]);
 
     // Calculate consolidated requisition
-    const requisitionData = (generated && selectedMenu && totalPeople > 0)
+    const requisitionData = useMemo(() => (generated && selectedMenu && totalPeople > 0)
         ? calcMenuRequisition(selectedMenu, recipes, ingredientsCatalog, groups)
-        : null;
+        : null, [generated, selectedMenu, totalPeople, recipes, ingredientsCatalog, groups]);
 
     return (
         <div className="fade-in-up">

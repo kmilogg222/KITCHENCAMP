@@ -13,75 +13,40 @@
  *
  * No contiene lógica de negocio propia; sólo orquesta los hooks y las vistas.
  */
-import { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 
 // ── Componentes ───────────────────────────────────────────────────────────────
 import Sidebar from './components/Sidebar';
+import { useKitchen } from './context/KitchenContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
-// ── Vistas ────────────────────────────────────────────────────────────────────
-import DashboardView from './views/DashboardView';
-import RecipesView from './views/RecipesView';
-import CreateRecipeView from './views/CreateRecipeView';
-import MenusView from './views/MenusView';
-import CreateMenuView from './views/CreateMenuView';
-import CalendarView from './views/CalendarView';
-import InventoryView from './views/InventoryView';
-import SuppliersView from './views/SuppliersView';
-import CartView from './views/CartView';
-
-// ── Custom Hooks ──────────────────────────────────────────────────────────────
-import { useCrudState } from './hooks/useCrudState';
-import { useCartManager } from './hooks/useCartManager';
-
-// ── Datos iniciales (mock) ───────────────────────────────────────────────────
-import {
-  recipes as MOCK_RECIPES,
-  ingredientsCatalog as MOCK_CATALOG,
-  suppliers as MOCK_SUPPLIERS,
-  menus as MOCK_MENUS,
-} from './data/mockData';
+// ── Vistas (Lazy Loaded) ──────────────────────────────────────────────────────
+const DashboardView = React.lazy(() => import('./views/DashboardView'));
+const RecipesView = React.lazy(() => import('./views/RecipesView'));
+const CreateRecipeView = React.lazy(() => import('./views/CreateRecipeView'));
+const MenusView = React.lazy(() => import('./views/MenusView'));
+const CreateMenuView = React.lazy(() => import('./views/CreateMenuView'));
+const CalendarView = React.lazy(() => import('./views/CalendarView'));
+const InventoryView = React.lazy(() => import('./views/InventoryView'));
+const SuppliersView = React.lazy(() => import('./views/SuppliersView'));
+const CartView = React.lazy(() => import('./views/CartView'));
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
+
+  const {
+    ingredients, addIngredient, updateIngredient, deleteIngredient,
+    suppliers, addSupplier, updateSupplier, deleteSupplier,
+    recipes, addRecipe, updateRecipe, removeRecipe,
+    menus, addMenu, updateMenu, removeMenu,
+    cart, addToCart, removeFromCart, clearCart
+  } = useKitchen();
 
   // ── Estado de navegación ─────────────────────────────────────────────────
   // `activeView` controla qué sección se muestra (sidebar-driven).
   const [activeView, setActiveView] = useState('dashboard');
   // `selectedRecipe` es la receta actualmente destacada en RecipesView.
   const [selectedRecipe, setSelectedRecipe] = useState(null);
-
-  // ── Colecciones CRUD (via hook genérico) ─────────────────────────────────
-  // Cada useCrudState retorna { items, add, update, remove }.
-  const {
-    items: ingredients,
-    add: addIngredient,
-    update: updateIngredient,
-    remove: deleteIngredient,
-  } = useCrudState(MOCK_CATALOG);
-
-  const {
-    items: suppliers,
-    add: addSupplier,
-    update: updateSupplier,
-    remove: deleteSupplier,
-  } = useCrudState(MOCK_SUPPLIERS);
-
-  const {
-    items: recipes,
-    add: addRecipe,
-    update: updateRecipe,
-    remove: removeRecipe,
-  } = useCrudState(MOCK_RECIPES);
-
-  const {
-    items: menus,
-    add: addMenu,
-    update: updateMenu,
-    remove: removeMenu,
-  } = useCrudState(MOCK_MENUS);
-
-  // ── Carrito de compras ────────────────────────────────────────────────────
-  const { cart, addToCart, removeFromCart, clearCart } = useCartManager();
 
   // ── Flujo de Crear / Editar receta ────────────────────────────────────────
   // `editingRecipe` es null cuando se crea y el objeto receta cuando se edita.
@@ -218,117 +183,90 @@ export default function App() {
         minHeight: '100vh',
         maxWidth: 'calc(100vw - 80px)',
       }}>
+        <ErrorBoundary>
+        <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: '#6b3fa0' }}>Loading...</div>}>
+          {/* ── Dashboard ───────────────────────────────────────────── */}
+          {activeView === 'dashboard' && (
+            <DashboardView
+              onSelectRecipe={(r) => {
+                setSelectedRecipe(r);
+                setActiveView('recipes');
+                setShowCreateView(false);
+              }}
+              onSelectMenu={(m) => {
+                setSelectedMenu(m);
+                setActiveView('menus');
+                setShowCreateMenuView(false);
+              }}
+              onNavigate={handleNavigate}
+              onCreateNew={openCreateView}
+              onCreateNewMenu={openCreateMenuView}
+            />
+          )}
 
-        {/* ── Dashboard ───────────────────────────────────────────── */}
-        {activeView === 'dashboard' && (
-          <DashboardView
-            recipes={recipes}
-            menus={menus}
-            onSelectRecipe={(r) => {
-              setSelectedRecipe(r);
-              setActiveView('recipes');
-              setShowCreateView(false);
-            }}
-            onSelectMenu={(m) => {
-              setSelectedMenu(m);
-              setActiveView('menus');
-              setShowCreateMenuView(false);
-            }}
-            onNavigate={handleNavigate}
-            onCreateNew={openCreateView}
-            onCreateNewMenu={openCreateMenuView}
-          />
-        )}
+          {/* ── Listado de Recetas ───────────────────────────────────── */}
+          {activeView === 'recipes' && !showCreateView && (
+            <RecipesView
+              selectedRecipe={selectedRecipe}
+              setSelectedRecipe={setSelectedRecipe}
+              onCreateNew={openCreateView}
+              onEditRecipe={openEditView}
+              onDeleteRecipe={handleDeleteRecipe}
+            />
+          )}
 
-        {/* ── Listado de Recetas ───────────────────────────────────── */}
-        {activeView === 'recipes' && !showCreateView && (
-          <RecipesView
-            recipes={recipes}
-            ingredientsCatalog={ingredients}
-            selectedRecipe={selectedRecipe}
-            setSelectedRecipe={setSelectedRecipe}
-            cart={cart}
-            onAddToCart={addToCart}
-            onCreateNew={openCreateView}
-            onEditRecipe={openEditView}
-            onDeleteRecipe={handleDeleteRecipe}
-          />
-        )}
+          {/* ── Formulario Crear / Editar Receta ─────────────────────── */}
+          {activeView === 'recipes' && showCreateView && (
+            <CreateRecipeView
+              editingRecipe={editingRecipe}
+              ingredientsCatalog={ingredients}
+              onSave={handleSaveRecipe}
+              onCancel={handleCancelCreate}
+            />
+          )}
 
-        {/* ── Formulario Crear / Editar Receta ─────────────────────── */}
-        {activeView === 'recipes' && showCreateView && (
-          <CreateRecipeView
-            editingRecipe={editingRecipe}
-            ingredientsCatalog={ingredients}
-            onSave={handleSaveRecipe}
-            onCancel={handleCancelCreate}
-          />
-        )}
+          {/* ── Listado de Menús ────────────────────────────────────── */}
+          {activeView === 'menus' && !showCreateMenuView && (
+            <MenusView
+              selectedMenu={selectedMenu}
+              setSelectedMenu={setSelectedMenu}
+              onCreateNew={openCreateMenuView}
+              onEditMenu={openEditMenuView}
+              onDeleteMenu={handleDeleteMenu}
+            />
+          )}
 
-        {/* ── Listado de Menús ────────────────────────────────────── */}
-        {activeView === 'menus' && !showCreateMenuView && (
-          <MenusView
-            menus={menus}
-            recipes={recipes}
-            ingredientsCatalog={ingredients}
-            selectedMenu={selectedMenu}
-            setSelectedMenu={setSelectedMenu}
-            cart={cart}
-            onAddToCart={addToCart}
-            onCreateNew={openCreateMenuView}
-            onEditMenu={openEditMenuView}
-            onDeleteMenu={handleDeleteMenu}
-          />
-        )}
+          {/* ── Formulario Crear / Editar Menú ────────────────────────── */}
+          {activeView === 'menus' && showCreateMenuView && (
+            <CreateMenuView
+              editingMenu={editingMenu}
+              recipes={recipes}
+              onSave={handleSaveMenu}
+              onCancel={handleCancelCreateMenu}
+            />
+          )}
 
-        {/* ── Formulario Crear / Editar Menú ────────────────────────── */}
-        {activeView === 'menus' && showCreateMenuView && (
-          <CreateMenuView
-            editingMenu={editingMenu}
-            recipes={recipes}
-            onSave={handleSaveMenu}
-            onCancel={handleCancelCreateMenu}
-          />
-        )}
+          {/* ── Calendario de Producción ─────────────────────────────── */}
+          {activeView === 'calendar' && (
+            <CalendarView />
+          )}
 
-        {/* ── Calendario de Producción ─────────────────────────────── */}
-        {activeView === 'calendar' && (
-          <CalendarView recipes={recipes} menus={menus} />
-        )}
+          {/* ── Inventario (catálogo global de ingredientes) ──────────── */}
+          {activeView === 'inventory' && (
+            <InventoryView />
+          )}
 
-        {/* ── Inventario (catálogo global de ingredientes) ──────────── */}
-        {activeView === 'inventory' && (
-          <InventoryView
-            ingredients={ingredients}
-            recipes={recipes}
-            suppliers={suppliers}
-            onUpdateIngredient={updateIngredient}
-            onAddIngredient={addIngredient}
-            onDeleteIngredient={deleteIngredient}
-          />
-        )}
+          {/* ── Gestión de Suppliers ─────────────────────────────────── */}
+          {activeView === 'suppliers' && (
+            <SuppliersView />
+          )}
 
-        {/* ── Gestión de Suppliers ─────────────────────────────────── */}
-        {activeView === 'suppliers' && (
-          <SuppliersView
-            suppliers={suppliers}
-            ingredients={ingredients}
-            onAddSupplier={addSupplier}
-            onUpdateSupplier={updateSupplier}
-            onDeleteSupplier={deleteSupplier}
-          />
-        )}
-
-        {/* ── Carrito de Compras ───────────────────────────────────── */}
-        {activeView === 'cart' && (
-          <CartView
-            cart={cart}
-            suppliers={suppliers}
-            onRemove={removeFromCart}
-            onClearCart={clearCart}
-          />
-        )}
-
+          {/* ── Carrito de Compras ───────────────────────────────────── */}
+          {activeView === 'cart' && (
+            <CartView />
+          )}
+        </Suspense>
+        </ErrorBoundary>
       </main>
     </div>
   );

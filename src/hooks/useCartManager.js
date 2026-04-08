@@ -13,10 +13,18 @@
  *   clearCart: () => void,
  * }}
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export function useCartManager() {
-    const [cart, setCart] = useState([]);
+    const [cart, setCart] = useState(() => {
+        const stored = localStorage.getItem('cart');
+        if (stored) return JSON.parse(stored);
+        return [];
+    });
+
+    useEffect(() => {
+        localStorage.setItem('cart', JSON.stringify(cart));
+    }, [cart]);
 
     /**
      * Agrega un ingrediente al carrito.

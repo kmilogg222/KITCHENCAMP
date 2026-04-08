@@ -20,6 +20,7 @@
  *  - onDeleteIngredient {Function}     - Elimina un ingrediente del catálogo.
  */
 import { useState } from 'react';
+import { List } from 'react-window';
 import {
     Plus, Pencil, Trash2, Save, X, AlertTriangle,
     CheckCircle2, ChevronUp, ChevronDown, Search
@@ -179,8 +180,18 @@ function IngredientModal({ ingredient, supplierIds = [], onSave, onClose }) {
     );
 }
 
+import { useKitchen } from '../context/KitchenContext';
+
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
-export default function InventoryView({ ingredients, recipes, suppliers = [], onUpdateIngredient, onAddIngredient, onDeleteIngredient }) {
+export default function InventoryView() {
+    const {
+        ingredients,
+        recipes,
+        suppliers = [],
+        updateIngredient: onUpdateIngredient,
+        addIngredient: onAddIngredient,
+        deleteIngredient: onDeleteIngredient
+    } = useKitchen();
     const SUPPLIER_IDS = suppliers.map(s => s.id);
     const [search, setSearch] = useState('');
     const [filterSupplier, setFilterSupplier] = useState('all');
@@ -295,103 +306,113 @@ export default function InventoryView({ ingredients, recipes, suppliers = [], on
                     <div style={{ fontWeight: 600, color: '#9b6dca' }}>No ingredients match the filters</div>
                 </div>
             ) : (
-                filtered.map(ing => {
-                    const isLow = ing.currentStock <= ing.minOrder;
-                    const pct = Math.min((ing.currentStock / Math.max(ing.minOrder * 3, 1)) * 100, 100);
-                    const usedIn = usedInRecipes(ing.id);
-                    const color = supColor(ing.supplier);
+                <List
+                    height={600}
+                    itemCount={filtered.length}
+                    itemSize={90}
+                    width={'100%'}
+                >
+                    {({ index, style }) => {
+                        const ing = filtered[index];
+                        const isLow = ing.currentStock <= ing.minOrder;
+                        const pct = Math.min((ing.currentStock / Math.max(ing.minOrder * 3, 1)) * 100, 100);
+                        const usedIn = usedInRecipes(ing.id);
+                        const color = supColor(ing.supplier);
 
-                    return (
-                        <div key={ing.id} className="glass-card" style={{
-                            marginBottom: 8, padding: '14px 16px',
-                            borderLeft: isLow ? '3px solid #ef4444' : '3px solid #4ecdc4',
-                        }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr 90px', alignItems: 'center', gap: 8 }}>
+                        return (
+                            <div style={{ ...style, paddingBottom: 8 }}>
+                                <div className="glass-card" style={{
+                                    height: '100%', padding: '14px 16px',
+                                    borderLeft: isLow ? '3px solid #ef4444' : '3px solid #4ecdc4',
+                                }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr 90px', alignItems: 'center', gap: 8 }}>
 
-                                {/* Name + recipes + sub */}
-                                <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                                        {isLow
-                                            ? <AlertTriangle size={14} color="#ef4444" />
-                                            : <CheckCircle2 size={14} color="#4ecdc4" />}
-                                        <span style={{ fontWeight: 700, fontSize: 14, color: '#3d1a78' }}>{ing.name}</span>
-                                        <span style={{ fontSize: 10, color: '#9b6dca' }}>({ing.unit})</span>
-                                        {ing.substitutable && (
-                                            <span className="chip chip-teal" style={{ fontSize: 10 }}>sub: {ing.substitute}</span>
-                                        )}
-                                    </div>
-                                    {usedIn.length > 0 && (
-                                        <div style={{ fontSize: 10, color: '#9b6dca' }}>
-                                            Used in: {usedIn.join(', ')}
+                                        {/* Name + recipes + sub */}
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                                                {isLow
+                                                    ? <AlertTriangle size={14} color="#ef4444" />
+                                                    : <CheckCircle2 size={14} color="#4ecdc4" />}
+                                                <span style={{ fontWeight: 700, fontSize: 14, color: '#3d1a78' }}>{ing.name}</span>
+                                                <span style={{ fontSize: 10, color: '#9b6dca' }}>({ing.unit})</span>
+                                                {ing.substitutable && (
+                                                    <span className="chip chip-teal" style={{ fontSize: 10 }}>sub: {ing.substitute}</span>
+                                                )}
+                                            </div>
+                                            {usedIn.length > 0 && (
+                                                <div style={{ fontSize: 10, color: '#9b6dca', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    Used in: {usedIn.join(', ')}
+                                                </div>
+                                            )}
+                                            {/* Stock bar */}
+                                            <div style={{ height: 4, background: '#e5e7eb', borderRadius: 99, marginTop: 6, width: '80%' }}>
+                                                <div style={{
+                                                    height: '100%', borderRadius: 99, width: `${pct}%`,
+                                                    background: isLow ? 'linear-gradient(135deg,#f59e0b,#ef4444)' : 'linear-gradient(135deg,#4ecdc4,#10b981)',
+                                                    transition: 'width 0.5s',
+                                                }} />
+                                            </div>
                                         </div>
-                                    )}
-                                    {/* Stock bar */}
-                                    <div style={{ height: 4, background: '#e5e7eb', borderRadius: 99, marginTop: 6, width: '80%' }}>
-                                        <div style={{
-                                            height: '100%', borderRadius: 99, width: `${pct}%`,
-                                            background: isLow ? 'linear-gradient(135deg,#f59e0b,#ef4444)' : 'linear-gradient(135deg,#4ecdc4,#10b981)',
-                                            transition: 'width 0.5s',
-                                        }} />
+
+                                        {/* Supplier */}
+                                        <div>
+                                            <span className="chip" style={{ background: `${color}18`, color }}>
+                                                {ing.supplier}
+                                            </span>
+                                        </div>
+
+                                        {/* Pack Size */}
+                                        <div style={{ fontSize: 13, color: '#374151' }}>
+                                            {ing.packSize.toLocaleString()} {ing.unit}
+                                        </div>
+
+                                        {/* Stock (with stepper) */}
+                                        <div>
+                                            <StockStepper
+                                                value={ing.currentStock}
+                                                onChange={v => onUpdateIngredient({ ...ing, currentStock: v })}
+                                            />
+                                            <div style={{ fontSize: 10, color: isLow ? '#ef4444' : '#9b6dca', fontWeight: isLow ? 700 : 400, marginTop: 2 }}>
+                                                {isLow ? 'Low stock!' : 'OK'}
+                                            </div>
+                                        </div>
+
+                                        {/* Min Order */}
+                                        <div style={{ fontSize: 13, color: '#374151', fontWeight: 600 }}>
+                                            {ing.minOrder} packs
+                                        </div>
+
+                                        {/* Price */}
+                                        <div style={{ fontSize: 14, fontWeight: 700, color: '#3d1a78' }}>
+                                            ${ing.pricePerPack}
+                                        </div>
+
+                                        {/* Actions */}
+                                        <div style={{ display: 'flex', gap: 6 }}>
+                                            <button
+                                                onClick={() => setModal(ing)}
+                                                title="Edit"
+                                                style={{ background: 'rgba(107,63,160,0.1)', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b3fa0' }}>
+                                                <Pencil size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(ing)}
+                                                title={deleteConfirm === ing.id ? 'Confirm delete' : 'Delete'}
+                                                style={{
+                                                    background: deleteConfirm === ing.id ? '#fef2f2' : 'rgba(239,68,68,0.1)',
+                                                    border: deleteConfirm === ing.id ? '1px solid #fca5a5' : 'none',
+                                                    borderRadius: 8, width: 32, height: 32, cursor: 'pointer',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444',
+                                                }}>
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-
-                                {/* Supplier */}
-                                <div>
-                                    <span className="chip" style={{ background: `${color}18`, color }}>
-                                        {ing.supplier}
-                                    </span>
-                                </div>
-
-                                {/* Pack Size */}
-                                <div style={{ fontSize: 13, color: '#374151' }}>
-                                    {ing.packSize.toLocaleString()} {ing.unit}
-                                </div>
-
-                                {/* Stock (with stepper) */}
-                                <div>
-                                    <StockStepper
-                                        value={ing.currentStock}
-                                        onChange={v => onUpdateIngredient({ ...ing, currentStock: v })}
-                                    />
-                                    <div style={{ fontSize: 10, color: isLow ? '#ef4444' : '#9b6dca', fontWeight: isLow ? 700 : 400, marginTop: 2 }}>
-                                        {isLow ? 'Low stock!' : 'OK'}
-                                    </div>
-                                </div>
-
-                                {/* Min Order */}
-                                <div style={{ fontSize: 13, color: '#374151', fontWeight: 600 }}>
-                                    {ing.minOrder} packs
-                                </div>
-
-                                {/* Price */}
-                                <div style={{ fontSize: 14, fontWeight: 700, color: '#3d1a78' }}>
-                                    ${ing.pricePerPack}
-                                </div>
-
-                                {/* Actions */}
-                                <div style={{ display: 'flex', gap: 6 }}>
-                                    <button
-                                        onClick={() => setModal(ing)}
-                                        title="Edit"
-                                        style={{ background: 'rgba(107,63,160,0.1)', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b3fa0' }}>
-                                        <Pencil size={14} />
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(ing)}
-                                        title={deleteConfirm === ing.id ? 'Confirm delete' : 'Delete'}
-                                        style={{
-                                            background: deleteConfirm === ing.id ? '#fef2f2' : 'rgba(239,68,68,0.1)',
-                                            border: deleteConfirm === ing.id ? '1px solid #fca5a5' : 'none',
-                                            borderRadius: 8, width: 32, height: 32, cursor: 'pointer',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444',
-                                        }}>
-                                        <Trash2 size={14} />
-                                    </button>
                                 </div>
                             </div>
-                        </div>
-                    );
-                })
+                        );
+                    }}
+                </List>
             )}
 
             {/* Modal */}
