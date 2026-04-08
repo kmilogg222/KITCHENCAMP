@@ -256,6 +256,7 @@ function DayPanel({ dateKey, dateLabel, meals, recipes, menus, onAdd, onRemove, 
                 background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(20px)',
                 borderLeft: '1px solid rgba(107,63,160,0.15)',
                 boxShadow: '-8px 0 32px rgba(61,26,120,0.12)',
+                borderTopLeftRadius: 24, borderBottomLeftRadius: 24,
                 zIndex: 100, display: 'flex', flexDirection: 'column',
                 animation: 'slideInRight 0.3s ease-out',
             }}>
@@ -581,6 +582,7 @@ export default function CalendarView() {
                             <div
                                 key={idx}
                                 className={`glass-card ${day && !isSelected ? 'hover-bg-purple' : ''}`}
+                                onClick={() => openDay(day)}
                                 style={{
                                     minHeight: 80, borderRadius: 10, padding: '8px 7px',
                                     background: isSelected
