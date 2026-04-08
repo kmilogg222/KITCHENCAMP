@@ -135,7 +135,7 @@ export default function RecipesView() {
                                     border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%',
                                     background: selectedRecipe?.id === r.id ? 'linear-gradient(135deg,rgba(107,63,160,0.15),rgba(78,205,196,0.15))' : 'rgba(255,255,255,0.5)',
                                     borderLeft: selectedRecipe?.id === r.id ? '3px solid #6b3fa0' : '3px solid transparent',
-                                    transition: 'all 0.2s', paddingRight: r.isCustom ? 70 : 14,
+                                    transition: 'all 0.2s', paddingRight: 70,
                                 }}>
                                     <span style={{ fontSize: 24, flexShrink: 0 }}>{r.image}</span>
                                     <div style={{ minWidth: 0 }}>
@@ -150,18 +150,16 @@ export default function RecipesView() {
                                         </div>
                                     </div>
                                 </button>
-                                {r.isCustom && (
-                                    <div style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: 4 }}>
-                                        <button onClick={e => { e.stopPropagation(); onEditRecipe(r); }} title="Edit"
+                                <div style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: 4 }}>
+                                    <button onClick={e => { e.stopPropagation(); onEditRecipe(r); }} title="Edit"
                                             style={{ background: 'rgba(107,63,160,0.1)', border: 'none', borderRadius: 8, width: 28, height: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b3fa0' }}>
                                             <Pencil size={13} />
                                         </button>
                                         <button onClick={e => { e.stopPropagation(); handleDelete(r.id); }} title={deleteConfirm === r.id ? 'Confirm' : 'Delete'}
                                             style={{ background: deleteConfirm === r.id ? '#fef2f2' : 'rgba(239,68,68,0.1)', border: deleteConfirm === r.id ? '1px solid #fca5a5' : 'none', borderRadius: 8, width: 28, height: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
                                             <Trash2 size={13} />
-                                        </button>
-                                    </div>
-                                )}
+                                    </button>
+                                </div>
                             </div>
                         ))}
                         <button onClick={onCreateNew} className="hover-border-purple" style={{
@@ -185,11 +183,9 @@ export default function RecipesView() {
                                     <StarRating rating={selectedRecipe.rating} />
                                 </div>
                                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                                    {selectedRecipe.isCustom && (
-                                        <button onClick={() => onEditRecipe(selectedRecipe)} className="btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }}>
-                                            <Pencil size={13} style={{ marginRight: 4 }} /> Edit
-                                        </button>
-                                    )}
+                                    <button onClick={() => onEditRecipe(selectedRecipe)} className="btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }}>
+                                        <Pencil size={13} style={{ marginRight: 4 }} /> Edit
+                                    </button>
                                     <Toggle on={useSubstitutions} onToggle={() => setUseSubstitutions(v => !v)} label="Substitutions" />
                                 </div>
                             </div>
