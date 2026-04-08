@@ -1,23 +1,10 @@
-import { useState } from 'react';
-import { useState as useStateAlias } from 'react';
+import { useState, useMemo } from 'react';
 import { Search, Zap, RefreshCw, ShoppingBasket, Plus, Pencil, Trash2 } from 'lucide-react';
 import { defaultGroups, calcRequisition, resolveIngredients } from '../data/mockData';
-import StarRating from '../components/StarRating';
 import Toggle from '../components/Toggle';
-
-function GroupInput({ group, value, onChange }) {
-    const colors = { A: '#4ecdc4', B: '#6b3fa0', C: '#f59e0b' };
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            <div className="group-badge" style={{ background: colors[group.id] ?? '#6b3fa0' }}>{group.id}</div>
-            <span style={{ fontSize: 11, fontWeight: 600, color: '#6b3fa0' }}>{group.label}</span>
-            <span style={{ fontSize: 10, color: '#9b6dca' }}>{group.sublabel}</span>
-            <input type="number" min={0} value={value}
-                onChange={e => onChange(group.id, Math.max(0, parseInt(e.target.value) || 0))}
-                className="qty-input" placeholder="0" />
-        </div>
-    );
-}
+import GroupInput from '../components/GroupInput';
+import useDeleteConfirm from '../hooks/useDeleteConfirm';
+import StarRating from '../components/StarRating';
 
 function IngredientRow({ ingredient, groups, useSubstitutions, onAddToCart, alreadyInCart }) {
     const [checked, setChecked] = useState(false);
@@ -71,22 +58,33 @@ function IngredientRow({ ingredient, groups, useSubstitutions, onAddToCart, alre
     );
 }
 
-export default function RecipesView({
-    recipes, ingredientsCatalog,
-    selectedRecipe, setSelectedRecipe,
-    cart, onAddToCart,
-    onCreateNew, onEditRecipe, onDeleteRecipe,
-}) {
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useStore } from '../store/useStore';
+
+export default function RecipesView() {
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const recipes = useStore(state => state.recipes);
+    const ingredientsCatalog = useStore(state => state.ingredients);
+    const cart = useStore(state => state.cart);
+    
+    const onAddToCart = useStore(state => state.addToCart);
+    const onDeleteRecipe = useStore(state => state.deleteRecipe);
+
+    const [selectedRecipe, setSelectedRecipe] = useState(location.state?.selectedRecipe || null);
+
+    const onCreateNew = () => navigate('/recipes/create');
+    const onEditRecipe = (recipe) => navigate(`/recipes/edit/${recipe.id}`, { state: { recipe } });
     const [search, setSearch] = useState('');
     const [groups, setGroups] = useState(defaultGroups);
     const [useSubstitutions, setUseSubstitutions] = useState(false);
     const [generated, setGenerated] = useState(false);
-    const [deleteConfirm, setDeleteConfirm] = useState(null);
-
-    const filtered = recipes.filter(r =>
+    const { deleteConfirm, confirmDelete } = useDeleteConfirm();
+    const filtered = useMemo(() => recipes.filter(r =>
         r.name.toLowerCase().includes(search.toLowerCase()) ||
         r.category.toLowerCase().includes(search.toLowerCase())
-    );
+    ), [recipes, search]);
 
     const updateCount = (id, val) => {
         setGroups(prev => prev.map(g => g.id === id ? { ...g, count: val } : g));
@@ -98,14 +96,15 @@ export default function RecipesView({
     const handleSelectRecipe = (r) => { setSelectedRecipe(r); setGenerated(false); setGroups(defaultGroups); };
 
     const handleDelete = (id) => {
-        if (deleteConfirm === id) { onDeleteRecipe(id); if (selectedRecipe?.id === id) setSelectedRecipe(null); setDeleteConfirm(null); }
-        else { setDeleteConfirm(id); setTimeout(() => setDeleteConfirm(null), 3000); }
+        confirmDelete(id, (deletedId) => {
+            onDeleteRecipe(deletedId);
+            if (selectedRecipe?.id === deletedId) setSelectedRecipe(null);
+        });
     };
-
     // Resolve recipe ingredients → full objects (catalog data + recipe portions)
-    const resolvedIngredients = selectedRecipe
+    const resolvedIngredients = useMemo(() => selectedRecipe
         ? resolveIngredients(selectedRecipe, ingredientsCatalog)
-        : [];
+        : [], [selectedRecipe, ingredientsCatalog]);
 
     const firstIng = resolvedIngredients[0];
 
@@ -165,11 +164,11 @@ export default function RecipesView({
                                 )}
                             </div>
                         ))}
-                        <button onClick={onCreateNew} style={{
+                        <button onClick={onCreateNew} className="hover-border-purple" style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 14px',
                             borderRadius: 14, cursor: 'pointer', marginTop: 4, background: 'transparent',
                             border: '1.5px dashed rgba(107,63,160,0.35)', color: '#9b6dca', fontSize: 13, fontWeight: 600, transition: 'all 0.2s',
-                        }} onMouseEnter={e => { e.currentTarget.style.borderColor = '#6b3fa0'; e.currentTarget.style.color = '#6b3fa0'; }} onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(107,63,160,0.35)'; e.currentTarget.style.color = '#9b6dca'; }}>
+                        }}>
                             <Plus size={15} /> Create new recipe
                         </button>
                     </div>

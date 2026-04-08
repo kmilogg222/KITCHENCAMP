@@ -15,6 +15,7 @@
 import { useState } from 'react';
 import { Trash2, FileText, CheckCircle2, ExternalLink, FileDown, Loader } from 'lucide-react';
 import { generatePurchaseOrderPDF } from '../utils/generatePurchaseOrderPDF';
+import { useStore } from '../store/useStore';
 
 // ── Sub-componente: sección de un supplier en la tabla ────────────────────────
 
@@ -129,8 +130,11 @@ function PDFSuccessBanner({ fileName }) {
 
 // ── Componente principal ──────────────────────────────────────────────────────
 
-/** Vista principal del carrito de compras. */
-export default function CartView({ cart, suppliers = [], onRemove, onClearCart }) {
+export default function CartView() {
+    const cart = useStore(state => state.cart);
+    const suppliers = useStore(state => state.suppliers);
+    const onRemove = useStore(state => state.removeFromCart);
+    const onClearCart = useStore(state => state.clearCart);
     const [generatingPDF, setGeneratingPDF] = useState(false);
     const [lastFileName, setLastFileName] = useState(null);
     const [vendorOpen, setVendorOpen] = useState(false);

@@ -272,9 +272,14 @@ export function calcRequisition(resolvedIngredient, groups) {
 // ── HELPER: resolve recipe ingredients against catalog ────────────────────────
 // Returns array of fully merged objects ready for calcRequisition
 export function resolveIngredients(recipe, catalog) {
+    // Construir índice O(1) para lookups rápidos por id
+    const catalogIndex = catalog instanceof Map
+        ? catalog
+        : new Map(catalog.map(i => [i.id, i]));
+
     return recipe.ingredients
         .map(ref => {
-            const ing = catalog.find(i => i.id === ref.ingredientId);
+            const ing = catalogIndex.get(ref.ingredientId);
             if (!ing) return null;
             return { ...ing, portionByGroup: ref.portionByGroup };
         })
@@ -300,16 +305,21 @@ export function resolveIngredients(recipe, catalog) {
  * @returns {{ consolidated: object[], byRecipe: object[] }}
  */
 export function calcMenuRequisition(menu, allRecipes, catalog, groups) {
+    // Construir índices O(1) para lookups rápidos
+    const catalogIndex = new Map(catalog.map(i => [i.id, i]));
+    const recipeIndex = new Map(allRecipes.map(r => [r.id, r]));
+
     // Map of ingredientId → { catalogEntry, portionByGroup (accumulated), usedInRecipes[] }
     const ingredientMap = new Map();
 
     const menuRecipes = menu.recipeIds
-        .map(rid => allRecipes.find(r => r.id === rid))
+        .map(rid => recipeIndex.get(rid))
         .filter(Boolean);
 
     // Per-recipe breakdown (for UI display)
+    // Pasar el catalogIndex ya construido para reusar el Map
     const byRecipe = menuRecipes.map(recipe => {
-        const resolved = resolveIngredients(recipe, catalog);
+        const resolved = resolveIngredients(recipe, catalogIndex);
         return {
             recipe,
             ingredients: resolved,
@@ -320,7 +330,7 @@ export function calcMenuRequisition(menu, allRecipes, catalog, groups) {
     // Consolidate: group same ingredients, sum portions
     menuRecipes.forEach(recipe => {
         recipe.ingredients.forEach(ref => {
-            const cat = catalog.find(c => c.id === ref.ingredientId);
+            const cat = catalogIndex.get(ref.ingredientId);
             if (!cat) return;
 
             if (ingredientMap.has(ref.ingredientId)) {

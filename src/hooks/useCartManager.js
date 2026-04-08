@@ -6,6 +6,9 @@
  * "Single Responsibility": App solo orquesta vistas; este hook
  * se encarga exclusivamente del estado del carrito.
  *
+ * El carrito se persiste automáticamente en localStorage bajo la
+ * clave 'kitchencalc_cart' y se rehidrata al montar el hook.
+ *
  * @returns {{
  *   cart: CartItem[],
  *   addToCart: (ingredient: Ingredient, result: CalcResult) => void,
@@ -13,10 +16,39 @@
  *   clearCart: () => void,
  * }}
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+const STORAGE_KEY = 'kitchencalc_cart';
+
+/**
+ * Lee el carrito desde localStorage de forma segura.
+ * @returns {CartItem[]|null}
+ */
+function readCart() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw === null) return null;
+        return JSON.parse(raw);
+    } catch {
+        console.warn('[useCartManager] Error leyendo carrito de localStorage, iniciando vacío.');
+        return null;
+    }
+}
 
 export function useCartManager() {
-    const [cart, setCart] = useState([]);
+    const [cart, setCart] = useState(() => {
+        const stored = readCart();
+        return Array.isArray(stored) ? stored : [];
+    });
+
+    // Persistir en localStorage cada vez que cart cambie
+    useEffect(() => {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(cart));
+        } catch (err) {
+            console.warn('[useCartManager] Error guardando carrito en localStorage:', err);
+        }
+    }, [cart]);
 
     /**
      * Agrega un ingrediente al carrito.

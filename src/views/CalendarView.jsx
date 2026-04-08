@@ -11,21 +11,18 @@
  *  - menus   {Menu[]}   - Available menus (groups of recipes).
  */
 import { useState, useMemo } from 'react';
+import { useStore } from '../store/useStore';
 import {
     ChevronLeft, ChevronRight, Plus, X, UtensilsCrossed,
-    Sun, Coffee, Moon, Apple, ClipboardList, ChevronDown, ChevronUp,
+    ClipboardList, ChevronDown, ChevronUp,
 } from 'lucide-react';
+import { MEAL_SLOTS, INPUT_STYLE } from '../constants/theme';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-const MEAL_SLOTS = [
-    { key: 'breakfast', label: 'Breakfast', icon: Coffee, color: '#f59e0b' },
-    { key: 'lunch', label: 'Lunch', icon: Sun, color: '#6b3fa0' },
-    { key: 'dinner', label: 'Dinner', icon: Moon, color: '#4ecdc4' },
-    { key: 'snack', label: 'Snack', icon: Apple, color: '#10b981' },
-];
+
 
 const toKey = (year, month, day) =>
     `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -88,11 +85,7 @@ function AddMealModal({ dateLabel, recipes, menus = [], onAdd, onClose }) {
         ? currentMenu.recipeIds.map(rid => recipes.find(r => r.id === rid)).filter(Boolean)
         : [];
 
-    const inputSx = {
-        padding: '8px 11px', borderRadius: 9, fontSize: 13,
-        border: '1.5px solid rgba(155,109,202,0.3)', outline: 'none',
-        background: 'rgba(255,255,255,0.85)', color: '#1f2937', width: '100%',
-    };
+    const inputSx = INPUT_STYLE;
 
     return (
         <div style={{
@@ -433,15 +426,17 @@ function DayPanel({ dateKey, dateLabel, meals, recipes, menus, onAdd, onRemove, 
     );
 }
 
-// ── MAIN CalendarView ─────────────────────────────────────────────────────────
-export default function CalendarView({ recipes = [], menus = [] }) {
+export default function CalendarView() {
+    const recipes = useStore(state => state.recipes);
+    const menus = useStore(state => state.menus);
     const today = new Date();
     const [month, setMonth] = useState(today.getMonth());
     const [year, setYear] = useState(today.getFullYear());
     const [selectedDay, setSelectedDay] = useState(null);
 
     // meals: { [dateKey]: [{id, type, slotKey, recipe?, menu?, menuRecipes?, note}] }
-    const [meals, setMeals] = useState({});
+    const meals = useStore(state => state.calendarEvents);
+    const setMeals = useStore(state => state.setCalendarEvents);
 
     const prev = () => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); };
     const next = () => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); };
@@ -585,7 +580,7 @@ export default function CalendarView({ recipes = [], menus = [] }) {
                         return (
                             <div
                                 key={idx}
-                                onClick={() => openDay(day)}
+                                className={`glass-card ${day && !isSelected ? 'hover-bg-purple' : ''}`}
                                 style={{
                                     minHeight: 80, borderRadius: 10, padding: '8px 7px',
                                     background: isSelected
@@ -604,11 +599,6 @@ export default function CalendarView({ recipes = [], menus = [] }) {
                                     transition: 'all 0.15s',
                                     position: 'relative',
                                     overflow: 'hidden',
-                                }}
-                                onMouseEnter={e => { if (day && !isSelected) e.currentTarget.style.background = 'rgba(107,63,160,0.07)'; }}
-                                onMouseLeave={e => {
-                                    if (day && !isSelected && !isToday) e.currentTarget.style.background = 'rgba(255,255,255,0.5)';
-                                    if (isToday && !isSelected) e.currentTarget.style.background = 'linear-gradient(135deg,rgba(107,63,160,0.1),rgba(78,205,196,0.1))';
                                 }}
                             >
                                 {day && (

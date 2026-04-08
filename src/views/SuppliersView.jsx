@@ -20,22 +20,16 @@
  *  - onUpdateSupplier {Function}   - Actualiza supplier en el estado global.
  *  - onDeleteSupplier {Function}   - Elimina supplier del estado global.
  */
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ExternalLink, Mail, Plus, Pencil, Trash2, Save, X, Search, Phone, Building2 } from 'lucide-react';
+import { INPUT_STYLE, SUPPLIER_COLOR_PALETTE } from '../constants/theme';
+import { useStore } from '../store/useStore';
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
-const inputSx = {
-    padding: '8px 11px', borderRadius: 9, fontSize: 13,
-    border: '1.5px solid rgba(155,109,202,0.3)', outline: 'none',
-    background: 'rgba(255,255,255,0.85)', color: '#1f2937', width: '100%',
-};
+const inputSx = INPUT_STYLE;
 
-// Preset palette for the color picker
-const COLOR_PALETTE = [
-    '#6b3fa0', '#4ecdc4', '#10b981', '#f59e0b', '#ef4444',
-    '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316',
-    '#06b6d4', '#84cc16', '#a855f7', '#0ea5e9', '#d97706',
-];
+// Alias for backward compatibility within this file
+const COLOR_PALETTE = SUPPLIER_COLOR_PALETTE;
 
 // ── Supplier Modal ─────────────────────────────────────────────────────────────
 function SupplierModal({ supplier, existingIds, onSave, onClose }) {
@@ -243,8 +237,12 @@ function DeleteConfirmModal({ supplier, ingredientCount, onConfirm, onClose }) {
     );
 }
 
-// ── MAIN COMPONENT ────────────────────────────────────────────────────────────
-export default function SuppliersView({ suppliers = [], ingredients = [], onAddSupplier, onUpdateSupplier, onDeleteSupplier }) {
+export default function SuppliersView() {
+    const suppliers = useStore(state => state.suppliers);
+    const ingredients = useStore(state => state.ingredients);
+    const onAddSupplier = useStore(state => state.addSupplier);
+    const onUpdateSupplier = useStore(state => state.updateSupplier);
+    const onDeleteSupplier = useStore(state => state.deleteSupplier);
     const [search, setSearch] = useState('');
     const [modal, setModal] = useState(null);      // null | {} (new) | supplier (edit)
     const [deleteTarget, setDeleteTarget] = useState(null);
@@ -257,11 +255,11 @@ export default function SuppliersView({ suppliers = [], ingredients = [], onAddS
     const ingredientNamesFor = (supId) =>
         ingredients.filter(i => i.supplier === supId).map(i => i.name);
 
-    const filtered = suppliers.filter(s =>
+    const filtered = useMemo(() => suppliers.filter(s =>
         s.name.toLowerCase().includes(search.toLowerCase()) ||
         s.id.toLowerCase().includes(search.toLowerCase()) ||
         (s.email ?? '').toLowerCase().includes(search.toLowerCase())
-    );
+    ), [suppliers, search]);
 
     const totalIngredients = ingredients.length;
     const totalSuppliers = suppliers.length;
@@ -372,28 +370,26 @@ export default function SuppliersView({ suppliers = [], ingredients = [], onAddS
                                     <button
                                         onClick={() => setModal(sup)}
                                         title="Edit supplier"
+                                        className="hover-action-edit"
                                         style={{
                                             background: 'rgba(107,63,160,0.1)', border: 'none', borderRadius: 9,
                                             width: 32, height: 32, cursor: 'pointer',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             transition: 'background 0.2s',
                                         }}
-                                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(107,63,160,0.2)'}
-                                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(107,63,160,0.1)'}
                                     >
                                         <Pencil size={14} color="#6b3fa0" />
                                     </button>
                                     <button
                                         onClick={() => setDeleteTarget(sup)}
                                         title="Delete supplier"
+                                        className="hover-action-delete"
                                         style={{
                                             background: 'rgba(239,68,68,0.1)', border: 'none', borderRadius: 9,
                                             width: 32, height: 32, cursor: 'pointer',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             transition: 'background 0.2s',
                                         }}
-                                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.2)'}
-                                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
                                     >
                                         <Trash2 size={14} color="#ef4444" />
                                     </button>

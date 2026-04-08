@@ -19,20 +19,16 @@
  *  - onAddIngredient    {Function}     - Agrega un ingrediente al catálogo.
  *  - onDeleteIngredient {Function}     - Elimina un ingrediente del catálogo.
  */
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
     Plus, Pencil, Trash2, Save, X, AlertTriangle,
     CheckCircle2, ChevronUp, ChevronDown, Search
 } from 'lucide-react';
+import { INPUT_STYLE, INGREDIENT_UNITS } from '../constants/theme';
+import useDeleteConfirm from '../hooks/useDeleteConfirm';
+import { useStore } from '../store/useStore';
 
-const UNITS = ['g', 'ml', 'units', 'kg', 'L', 'oz'];
-
-// ── Shared input styles ───────────────────────────────────────────────────────
-const inputSx = {
-    padding: '7px 10px', borderRadius: 8, fontSize: 13,
-    border: '1.5px solid rgba(155,109,202,0.3)', outline: 'none',
-    background: 'rgba(255,255,255,0.85)', color: '#1f2937', width: '100%',
-};
+const inputSx = INPUT_STYLE;
 
 // ── Stock stepper ─────────────────────────────────────────────────────────────
 function StockStepper({ value, onChange }) {
@@ -127,7 +123,7 @@ function IngredientModal({ ingredient, supplierIds = [], onSave, onClose }) {
                     <div>
                         <label style={{ fontSize: 11, fontWeight: 700, color: '#6b3fa0', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Unit</label>
                         <select value={form.unit} onChange={e => set('unit', e.target.value)} style={inputSx}>
-                            {UNITS.map(u => <option key={u}>{u}</option>)}
+                            {INGREDIENT_UNITS.map(u => <option key={u}>{u}</option>)}
                         </select>
                     </div>
                 </div>
@@ -179,38 +175,38 @@ function IngredientModal({ ingredient, supplierIds = [], onSave, onClose }) {
     );
 }
 
-// ── MAIN COMPONENT ────────────────────────────────────────────────────────────
-export default function InventoryView({ ingredients, recipes, suppliers = [], onUpdateIngredient, onAddIngredient, onDeleteIngredient }) {
-    const SUPPLIER_IDS = suppliers.map(s => s.id);
+export default function InventoryView() {
+    const ingredients = useStore(state => state.ingredients);
+    const recipes = useStore(state => state.recipes);
+    const suppliers = useStore(state => state.suppliers);
+    const onUpdateIngredient = useStore(state => state.updateIngredient);
+    const onAddIngredient = useStore(state => state.addIngredient);
+    const onDeleteIngredient = useStore(state => state.deleteIngredient);
+
+    const SUPPLIER_IDS = useMemo(() => suppliers.map(s => s.id), [suppliers]);
     const [search, setSearch] = useState('');
     const [filterSupplier, setFilterSupplier] = useState('all');
     const [filterStatus, setFilterStatus] = useState('all');
     const [modal, setModal] = useState(null); // null | {} (new) | ingredient (edit)
-    const [deleteConfirm, setDeleteConfirm] = useState(null);
+    const { deleteConfirm, confirmDelete } = useDeleteConfirm();
 
     // Which recipes use a given ingredient
     const usedInRecipes = (ingId) =>
         recipes.filter(r => r.ingredients.some(ref => ref.ingredientId === ingId)).map(r => r.name);
 
-    const filtered = ingredients.filter(ing => {
+    const filtered = useMemo(() => ingredients.filter(ing => {
         const matchSearch = ing.name.toLowerCase().includes(search.toLowerCase()) ||
             ing.supplier.toLowerCase().includes(search.toLowerCase());
         const matchSupplier = filterSupplier === 'all' || ing.supplier === filterSupplier;
         const isLow = ing.currentStock <= ing.minOrder;
         const matchStatus = filterStatus === 'all' || (filterStatus === 'low' ? isLow : !isLow);
         return matchSearch && matchSupplier && matchStatus;
-    });
+    }), [ingredients, search, filterSupplier, filterStatus]);
 
-    const lowCount = ingredients.filter(i => i.currentStock <= i.minOrder).length;
+    const lowCount = useMemo(() => ingredients.filter(i => i.currentStock <= i.minOrder).length, [ingredients]);
 
     const handleDelete = (ing) => {
-        if (deleteConfirm === ing.id) {
-            onDeleteIngredient(ing.id);
-            setDeleteConfirm(null);
-        } else {
-            setDeleteConfirm(ing.id);
-            setTimeout(() => setDeleteConfirm(null), 3000);
-        }
+        confirmDelete(ing.id, onDeleteIngredient);
     };
 
     const supColor = (supId) => suppliers.find(s => s.id === supId)?.color ?? '#6b3fa0';

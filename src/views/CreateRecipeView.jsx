@@ -3,50 +3,15 @@ import {
     ChevronLeft, Plus, Trash2, Save, AlertCircle,
     CheckCircle2, Package, Smile, Link, PlusCircle
 } from 'lucide-react';
-import { suppliers } from '../data/mockData';
 
 const EMOJIS = ['🍗', '🍟', '🥗', '🍝', '🍣', '🥩', '🍲', '🥘', '🌮', '🍕',
     '🥪', '🍜', '🥚', '🫕', '🥦', '🍖', '🧆', '🫔', '🥙', '🍱'];
 const CATEGORIES = ['Main Course', 'Starter', 'Kids Favorite', 'Dessert', 'Vegan', 'Soup', 'Salad', 'Snack'];
-const UNITS = ['g', 'ml', 'units', 'kg', 'L', 'oz'];
-const SUPPLIER_IDS = suppliers.map(s => s.id);
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useStore } from '../store/useStore';
+import { INGREDIENT_UNITS } from '../constants/theme';
+import { Label, TInput, SInput } from '../components/FormControls';
 
-// ── Shared UI helpers ─────────────────────────────────────────────────────────
-function Label({ children }) {
-    return (
-        <label style={{ fontSize: 11, fontWeight: 700, color: '#6b3fa0', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 4 }}>
-            {children}
-        </label>
-    );
-}
-function TInput({ value, onChange, placeholder, type = 'text', min, disabled, style = {} }) {
-    return (
-        <input type={type} value={value} onChange={onChange} placeholder={placeholder} min={min} disabled={disabled}
-            style={{
-                padding: '8px 11px', borderRadius: 9, fontSize: 13,
-                border: '1.5px solid rgba(155,109,202,0.3)', outline: 'none',
-                background: disabled ? 'rgba(243,234,252,0.5)' : 'rgba(255,255,255,0.85)',
-                color: disabled ? '#9b6dca' : '#1f2937', width: '100%',
-                transition: 'border-color 0.2s', ...style,
-            }}
-            onFocus={e => { if (!disabled) e.target.style.borderColor = '#6b3fa0'; }}
-            onBlur={e => e.target.style.borderColor = 'rgba(155,109,202,0.3)'}
-        />
-    );
-}
-function SInput({ value, onChange, options, disabled }) {
-    return (
-        <select value={value} onChange={onChange} disabled={disabled}
-            style={{
-                padding: '8px 11px', borderRadius: 9, fontSize: 13,
-                border: '1.5px solid rgba(155,109,202,0.3)', outline: 'none',
-                background: disabled ? 'rgba(243,234,252,0.5)' : 'rgba(255,255,255,0.85)',
-                color: disabled ? '#9b6dca' : '#1f2937', width: '100%', cursor: disabled ? 'default' : 'pointer',
-            }}>
-            {options.map(o => <option key={typeof o === 'string' ? o : o.value} value={typeof o === 'string' ? o : o.value}>{typeof o === 'string' ? o : o.label}</option>)}
-        </select>
-    );
-}
 
 // ── Empty ingredient slot ─────────────────────────────────────────────────────
 // mode: 'existing' → pick from catalog | 'new' → create inline
@@ -187,7 +152,7 @@ function IngredientSlot({ slot, index, catalog, onChange, onRemove, errors }) {
                         </div>
                         <div>
                             <Label>Unit</Label>
-                            <SInput value={slot.unit} onChange={e => update('unit', e.target.value)} options={UNITS} />
+                            <SInput value={slot.unit} onChange={e => update('unit', e.target.value)} options={INGREDIENT_UNITS} />
                         </div>
                         <div>
                             <Label>Supplier</Label>
@@ -251,8 +216,19 @@ function IngredientSlot({ slot, index, catalog, onChange, onRemove, errors }) {
 }
 
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
-export default function CreateRecipeView({ onSave, onCancel, editingRecipe, ingredientsCatalog }) {
+export default function CreateRecipeView() {
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const ingredientsCatalog = useStore(state => state.ingredients);
+    const suppliers = useStore(state => state.suppliers);
+    const addRecipe = useStore(state => state.addRecipe);
+    const updateRecipe = useStore(state => state.updateRecipe);
+    const addIngredient = useStore(state => state.addIngredient);
+
+    const editingRecipe = location.state?.recipe;
     const isEditing = !!editingRecipe;
+    const SUPPLIER_IDS = suppliers.map(s => s.id);
 
     const [form, setForm] = useState(() => ({
         name: editingRecipe?.name ?? '',
@@ -345,9 +321,18 @@ export default function CreateRecipeView({ onSave, onCancel, editingRecipe, ingr
             ingredients: recipeIngredients,
         };
 
+        newIngredients.forEach(ing => addIngredient(ing));
+        if (isEditing) {
+            updateRecipe(recipe);
+        } else {
+            addRecipe(recipe);
+        }
+
         setSaved(true);
-        setTimeout(() => onSave(recipe, newIngredients), 400);
+        setTimeout(() => navigate('/recipes'), 400);
     };
+
+    const onCancel = () => navigate('/recipes');
 
     return (
         <div className="fade-in-up">

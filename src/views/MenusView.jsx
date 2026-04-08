@@ -10,27 +10,16 @@
  *  - Izquierda: lista de menús con búsqueda
  *  - Derecha: detalle del menú seleccionado + requisición consolidada
  */
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
     Search, Zap, RefreshCw, ShoppingBasket, Plus,
     Pencil, Trash2, ChefHat, Layers,
 } from 'lucide-react';
 import { defaultGroups, calcMenuRequisition } from '../data/mockData';
+import GroupInput from '../components/GroupInput';
+import useDeleteConfirm from '../hooks/useDeleteConfirm';
 
-// ── Group input (same pattern as RecipesView) ────────────────────────────────
-function GroupInput({ group, value, onChange }) {
-    const colors = { A: '#4ecdc4', B: '#6b3fa0', C: '#f59e0b' };
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            <div className="group-badge" style={{ background: colors[group.id] ?? '#6b3fa0' }}>{group.id}</div>
-            <span style={{ fontSize: 11, fontWeight: 600, color: '#6b3fa0' }}>{group.label}</span>
-            <span style={{ fontSize: 10, color: '#9b6dca' }}>{group.sublabel}</span>
-            <input type="number" min={0} value={value}
-                onChange={e => onChange(group.id, Math.max(0, parseInt(e.target.value) || 0))}
-                className="qty-input" placeholder="0" />
-        </div>
-    );
-}
+
 
 // ── Consolidated ingredient row ──────────────────────────────────────────────
 function ConsolidatedIngredientRow({ item, onAddToCart, alreadyInCart }) {
@@ -91,21 +80,34 @@ function ConsolidatedIngredientRow({ item, onAddToCart, alreadyInCart }) {
 }
 
 // ── MAIN COMPONENT ───────────────────────────────────────────────────────────
-export default function MenusView({
-    menus, recipes, ingredientsCatalog,
-    selectedMenu, setSelectedMenu,
-    cart, onAddToCart,
-    onCreateNew, onEditMenu, onDeleteMenu,
-}) {
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useStore } from '../store/useStore';
+
+export default function MenusView() {
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const menus = useStore(state => state.menus);
+    const recipes = useStore(state => state.recipes);
+    const ingredientsCatalog = useStore(state => state.ingredients);
+    const cart = useStore(state => state.cart);
+    
+    const onAddToCart = useStore(state => state.addToCart);
+    const onDeleteMenu = useStore(state => state.deleteMenu);
+
+    const [selectedMenu, setSelectedMenu] = useState(location.state?.selectedMenu || null);
+    
+    const onCreateNew = () => navigate('/menus/create');
+    const onEditMenu = (menu) => navigate(`/menus/edit/${menu.id}`, { state: { menu } });
     const [search, setSearch] = useState('');
     const [groups, setGroups] = useState(defaultGroups);
     const [generated, setGenerated] = useState(false);
-    const [deleteConfirm, setDeleteConfirm] = useState(null);
+    const { deleteConfirm, confirmDelete } = useDeleteConfirm();
 
-    const filtered = menus.filter(m =>
+    const filtered = useMemo(() => menus.filter(m =>
         m.name.toLowerCase().includes(search.toLowerCase()) ||
         m.description.toLowerCase().includes(search.toLowerCase())
-    );
+    ), [menus, search]);
 
     const updateCount = (id, val) => {
         setGroups(prev => prev.map(g => g.id === id ? { ...g, count: val } : g));
@@ -117,19 +119,21 @@ export default function MenusView({
     const handleSelectMenu = (m) => { setSelectedMenu(m); setGenerated(false); setGroups(defaultGroups); };
 
     const handleDelete = (id) => {
-        if (deleteConfirm === id) { onDeleteMenu(id); if (selectedMenu?.id === id) setSelectedMenu(null); setDeleteConfirm(null); }
-        else { setDeleteConfirm(id); setTimeout(() => setDeleteConfirm(null), 3000); }
+        confirmDelete(id, (deletedId) => {
+            onDeleteMenu(deletedId);
+            if (selectedMenu?.id === deletedId) setSelectedMenu(null);
+        });
     };
 
     // Get recipes that belong to the selected menu
-    const menuRecipes = selectedMenu
+    const menuRecipes = useMemo(() => selectedMenu
         ? selectedMenu.recipeIds.map(rid => recipes.find(r => r.id === rid)).filter(Boolean)
-        : [];
+        : [], [selectedMenu, recipes]);
 
     // Calculate consolidated requisition
-    const requisitionData = (generated && selectedMenu && totalPeople > 0)
+    const requisitionData = useMemo(() => (generated && selectedMenu && totalPeople > 0)
         ? calcMenuRequisition(selectedMenu, recipes, ingredientsCatalog, groups)
-        : null;
+        : null, [generated, selectedMenu, totalPeople, recipes, ingredientsCatalog, groups]);
 
     return (
         <div className="fade-in-up">
@@ -185,11 +189,11 @@ export default function MenusView({
                                 </div>
                             );
                         })}
-                        <button onClick={onCreateNew} style={{
+                        <button onClick={onCreateNew} className="hover-border-purple" style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 14px',
                             borderRadius: 14, cursor: 'pointer', marginTop: 4, background: 'transparent',
                             border: '1.5px dashed rgba(107,63,160,0.35)', color: '#9b6dca', fontSize: 13, fontWeight: 600, transition: 'all 0.2s',
-                        }} onMouseEnter={e => { e.currentTarget.style.borderColor = '#6b3fa0'; e.currentTarget.style.color = '#6b3fa0'; }} onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(107,63,160,0.35)'; e.currentTarget.style.color = '#9b6dca'; }}>
+                        }}>
                             <Plus size={15} /> Create new menu
                         </button>
                     </div>

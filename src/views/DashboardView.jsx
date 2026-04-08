@@ -14,10 +14,21 @@
  *  - onNavigate     {Function}  - Navega a cualquier vista por ID.
  *  - onCreateNew    {Function}  - Abre el formulario de creación de receta.
  */
+import { useNavigate } from 'react-router-dom';
+import { useStore } from '../store/useStore';
 import { Search, Sparkles, TrendingUp, Clock, ChefHat, Plus, ClipboardList } from 'lucide-react';
 import StarRating from '../components/StarRating';
 
-export default function DashboardView({ recipes, menus = [], onSelectRecipe, onSelectMenu, onNavigate, onCreateNew, onCreateNewMenu }) {
+export default function DashboardView() {
+    const navigate = useNavigate();
+    const recipes = useStore(state => state.recipes);
+    const menus = useStore(state => state.menus);
+
+    const onSelectRecipe = (r) => navigate('/recipes', { state: { selectedRecipe: r } });
+    const onSelectMenu = (m) => navigate('/menus', { state: { selectedMenu: m } });
+    const onCreateNew = () => navigate('/recipes/create');
+    const onCreateNewMenu = () => navigate('/menus/create');
+    const onNavigate = (path) => navigate(`/${path}`);
     return (
         <div className="fade-in-up">
             {/* Header */}
@@ -108,10 +119,8 @@ export default function DashboardView({ recipes, menus = [], onSelectRecipe, onS
                     {recipes.map((r) => (
                         <div key={r.id}
                             onClick={() => onSelectRecipe(r)}
-                            className="glass-card"
-                            style={{ padding: 20, cursor: 'pointer', transition: 'all 0.25s', position: 'relative', overflow: 'hidden' }}
-                            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 16px 40px rgba(109,63,160,0.2)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
+                            className="glass-card hover-lift"
+                            style={{ padding: 20, cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
                         >
                             {r.isCustom && (
                                 <span style={{
@@ -137,16 +146,14 @@ export default function DashboardView({ recipes, menus = [], onSelectRecipe, onS
                     {/* Create new card */}
                     <div
                         onClick={onCreateNew}
-                        className="glass-card"
+                        className="glass-card hover-border-purple"
                         style={{
-                            padding: 20, cursor: 'pointer', transition: 'all 0.25s',
+                            padding: 20, cursor: 'pointer',
                             border: '1.5px dashed rgba(107,63,160,0.35)',
                             display: 'flex', flexDirection: 'column', alignItems: 'center',
                             justifyContent: 'center', gap: 10, minHeight: 160,
                             background: 'rgba(255,255,255,0.3)',
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#6b3fa0'; e.currentTarget.style.background = 'rgba(107,63,160,0.05)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(107,63,160,0.35)'; e.currentTarget.style.background = 'rgba(255,255,255,0.3)'; }}
                     >
                         <div style={{
                             width: 48, height: 48, borderRadius: 14, background: 'rgba(107,63,160,0.1)',
@@ -179,10 +186,8 @@ export default function DashboardView({ recipes, menus = [], onSelectRecipe, onS
                         return (
                             <div key={m.id}
                                 onClick={() => onSelectMenu(m)}
-                                className="glass-card"
-                                style={{ padding: 20, cursor: 'pointer', transition: 'all 0.25s', position: 'relative', overflow: 'hidden' }}
-                                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 16px 40px rgba(109,63,160,0.2)'; }}
-                                onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
+                                className="glass-card hover-lift"
+                                style={{ padding: 20, cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
                             >
                                 <div style={{ fontSize: 40, marginBottom: 12 }}>{m.image}</div>
                                 <div style={{ fontWeight: 700, fontSize: 15, color: '#3d1a78', marginBottom: 4 }}>{m.name}</div>
@@ -200,16 +205,14 @@ export default function DashboardView({ recipes, menus = [], onSelectRecipe, onS
                     {/* Create new menu card */}
                     <div
                         onClick={onCreateNewMenu}
-                        className="glass-card"
+                        className="glass-card hover-border-teal"
                         style={{
-                            padding: 20, cursor: 'pointer', transition: 'all 0.25s',
+                            padding: 20, cursor: 'pointer',
                             border: '1.5px dashed rgba(78,205,196,0.45)',
                             display: 'flex', flexDirection: 'column', alignItems: 'center',
                             justifyContent: 'center', gap: 10, minHeight: 160,
                             background: 'rgba(255,255,255,0.3)',
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#4ecdc4'; e.currentTarget.style.background = 'rgba(78,205,196,0.05)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(78,205,196,0.45)'; e.currentTarget.style.background = 'rgba(255,255,255,0.3)'; }}
                     >
                         <div style={{
                             width: 48, height: 48, borderRadius: 14, background: 'rgba(78,205,196,0.1)',

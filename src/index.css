@@ -473,3 +473,58 @@ body {
   align-items: center;
   letter-spacing: 0.3px;
 }
+
+/* ── Hover utility classes ─────────────────────────────────────────────────── */
+/* Replace onMouseEnter/onMouseLeave JS handlers with CSS pseudo-classes.     */
+
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 40px rgba(109, 63, 160, 0.2);
+}
+
+.hover-scale {
+  transition: transform 0.2s ease;
+}
+.hover-scale:hover {
+  transform: scale(1.08);
+}
+
+.hover-border-purple {
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+.hover-border-purple:hover {
+  border-color: var(--purple-mid) !important;
+  color: var(--purple-mid) !important;
+}
+
+.hover-border-teal {
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+.hover-border-teal:hover {
+  border-color: var(--teal) !important;
+  background: rgba(78, 205, 196, 0.05) !important;
+}
+
+.hover-bg-purple {
+  transition: background-color 0.2s ease;
+}
+.hover-bg-purple:hover {
+  background: rgba(107, 63, 160, 0.07) !important;
+}
+
+.hover-action-edit {
+  transition: background-color 0.15s ease;
+}
+.hover-action-edit:hover {
+  background: rgba(107, 63, 160, 0.2);
+}
+
+.hover-action-delete {
+  transition: background-color 0.15s ease;
+}
+.hover-action-delete:hover {
+  background: rgba(239, 68, 68, 0.2);
+}

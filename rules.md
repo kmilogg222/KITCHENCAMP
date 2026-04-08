@@ -15,10 +15,11 @@
 | Language | JavaScript (JSX) | ES2022+ |
 | Icons | lucide-react | Latest |
 | PDF | jsPDF | 4.x |
-| State | React hooks nativos (`useState`, `useMemo`) + custom hooks | — |
-| Routing | State-based navigation (`activeView` in `App.jsx`) | No react-router |
+| State | Zustand (global) + React hooks nativos (local) | Latest |
+| Routing | react-router-dom (v7) + `React.lazy` code-splitting | Latest |
 
-> **Do NOT** introduce TypeScript, react-router, Redux, Zustand, or any state management library without explicit user approval.
+> **Do NOT** introduce TypeScript, Redux, or any additional library without explicit user approval.
+> Zustand and react-router-dom were approved on 2026-04-07.
 
 ---
 

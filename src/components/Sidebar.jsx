@@ -10,9 +10,21 @@
  *  - onNavigate {Function} - Callback para cambiar de vista.
  *  - cartCount  {number}   - Número de ítems en el carrito (para el badge).
  */
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ChefHat, Calendar, Package, Truck, ShoppingCart, ClipboardList } from 'lucide-react';
+import { useStore } from '../store/useStore';
 
-export default function Sidebar({ activeView, onNavigate, cartCount }) {
+export default function Sidebar() {
+    const navigate = useNavigate();
+    const location = useLocation();
+    const cart = useStore(state => state.cart);
+    const cartCount = cart.reduce((sum, item) => sum + item.packs, 0);
+    
+    // Extract the active section from the URL path (e.g. "/recipes/create" -> "recipes")
+    const activeView = location.pathname.split('/')[1] || 'dashboard';
+
+    const onNavigate = (path) => navigate(`/${path}`);
+
     // Definición declarativa de los ítems de navegación.
     // Agregar una nueva sección solo requiere agregar una entrada aquí.
     const navItems = [
@@ -28,19 +40,15 @@ export default function Sidebar({ activeView, onNavigate, cartCount }) {
         <aside className="fixed left-0 top-0 h-full flex flex-col items-center py-8 gap-3 z-40"
             style={{ width: 80, background: 'rgba(61,26,120,0.92)', backdropFilter: 'blur(20px)' }}>
             {/* Logo — click to go back to Dashboard */}
-            <div className="flex flex-col items-center mb-6"
+            <div className="flex flex-col items-center mb-6 hover-scale"
                 onClick={() => onNavigate('dashboard')}
-                style={{ cursor: 'pointer', transition: 'transform 0.2s' }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                style={{ cursor: 'pointer' }}
                 title="Back to Dashboard"
             >
                 <div className="rounded-2xl flex items-center justify-center mb-1"
                     style={{
                         width: 48, height: 48,
-                        background: activeView === 'dashboard'
-                            ? 'linear-gradient(135deg,#4ecdc4,#38b2ac)'
-                            : 'linear-gradient(135deg,#4ecdc4,#38b2ac)',
+                        background: 'linear-gradient(135deg,#4ecdc4,#38b2ac)',
                         boxShadow: activeView === 'dashboard' ? '0 0 12px rgba(78,205,196,0.5)' : 'none',
                         transition: 'box-shadow 0.2s',
                     }}>

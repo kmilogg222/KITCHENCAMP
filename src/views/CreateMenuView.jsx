@@ -17,30 +17,19 @@ import {
 const MENU_EMOJIS = ['🍱', '🎉', '🌟', '🥂', '🍽️', '☀️', '🌙', '🎊',
     '🏖️', '🎄', '🦃', '🥗', '🍕', '🌮', '🍣', '🎂', '🍰', '🧁', '🫕', '🥘'];
 
-// ── Shared UI helpers ─────────────────────────────────────────────────────────
-function Label({ children }) {
-    return (
-        <label style={{ fontSize: 11, fontWeight: 700, color: '#6b3fa0', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 4 }}>
-            {children}
-        </label>
-    );
-}
-function TInput({ value, onChange, placeholder, type = 'text', style = {} }) {
-    return (
-        <input type={type} value={value} onChange={onChange} placeholder={placeholder}
-            style={{
-                padding: '8px 11px', borderRadius: 9, fontSize: 13,
-                border: '1.5px solid rgba(155,109,202,0.3)', outline: 'none',
-                background: 'rgba(255,255,255,0.85)', color: '#1f2937', width: '100%',
-                transition: 'border-color 0.2s', ...style,
-            }}
-            onFocus={e => e.target.style.borderColor = '#6b3fa0'}
-            onBlur={e => e.target.style.borderColor = 'rgba(155,109,202,0.3)'}
-        />
-    );
-}
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useStore } from '../store/useStore';
+import { Label, TInput } from '../components/FormControls';
 
-export default function CreateMenuView({ onSave, onCancel, editingMenu, recipes }) {
+export default function CreateMenuView() {
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const recipes = useStore(state => state.recipes);
+    const addMenu = useStore(state => state.addMenu);
+    const updateMenu = useStore(state => state.updateMenu);
+
+    const editingMenu = location.state?.menu;
     const isEditing = !!editingMenu;
 
     const [form, setForm] = useState(() => ({
@@ -108,9 +97,17 @@ export default function CreateMenuView({ onSave, onCancel, editingMenu, recipes 
             createdAt: editingMenu?.createdAt ?? new Date().toISOString().slice(0, 10),
         };
 
+        if (isEditing) {
+            updateMenu(menu);
+        } else {
+            addMenu(menu);
+        }
+
         setSaved(true);
-        setTimeout(() => onSave(menu), 400);
+        setTimeout(() => navigate('/menus'), 400);
     };
+
+    const onCancel = () => navigate('/menus');
 
     // Count total unique ingredients across selected recipes
     const totalIngredients = new Set(
@@ -286,14 +283,11 @@ export default function CreateMenuView({ onSave, onCancel, editingMenu, recipes 
 
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
                             {availableRecipes.map(r => (
-                                <button key={r.id} onClick={() => addRecipe(r.id)} style={{
+                                <button key={r.id} className="hover-border-teal" onClick={() => addRecipe(r.id)} style={{
                                     display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 12,
                                     border: '1.5px solid rgba(155,109,202,0.2)', cursor: 'pointer', textAlign: 'left',
                                     background: 'rgba(255,255,255,0.6)', transition: 'all 0.2s',
-                                }}
-                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#4ecdc4'; e.currentTarget.style.background = 'rgba(78,205,196,0.08)'; }}
-                                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(155,109,202,0.2)'; e.currentTarget.style.background = 'rgba(255,255,255,0.6)'; }}
-                                >
+                                }}>
                                     <span style={{ fontSize: 22 }}>{r.image}</span>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{ fontWeight: 600, fontSize: 12, color: '#3d1a78' }}>{r.name}</div>
