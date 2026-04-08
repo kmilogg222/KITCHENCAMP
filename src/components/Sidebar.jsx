@@ -11,7 +11,7 @@
  *  - cartCount  {number}   - Número de ítems en el carrito (para el badge).
  */
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChefHat, Calendar, Package, Truck, ShoppingCart, ClipboardList } from 'lucide-react';
+import { ChefHat, Calendar, Package, Truck, ShoppingCart, ClipboardList, Calculator, Activity, Users } from 'lucide-react';
 import { useStore } from '../store/useStore';
 
 export default function Sidebar() {
@@ -34,6 +34,10 @@ export default function Sidebar() {
         { id: 'inventory', icon: Package, label: 'Inventory' },
         { id: 'suppliers', icon: Truck, label: 'Suppliers' },
         { id: 'cart', icon: ShoppingCart, label: 'Cart', badge: cartCount },
+        // --- Mockups ---
+        { id: 'budget', icon: Calculator, label: 'Budget', isMockup: true },
+        { id: 'activity', icon: Activity, label: 'Activity', isMockup: true },
+        { id: 'staff', icon: Users, label: 'Staff', isMockup: true },
     ];
 
     return (
@@ -57,17 +61,18 @@ export default function Sidebar() {
                 <span style={{ color: activeView === 'dashboard' ? '#4ecdc4' : '#d4c3f0', fontSize: 9, fontWeight: 700, letterSpacing: 1, transition: 'color 0.2s' }}>KitchenCalc</span>
             </div>
 
-            {navItems.map(({ id, icon: Icon, label, badge }) => (
+            {navItems.map(({ id, icon: Icon, label, badge, isMockup }) => (
                 <button key={id}
-                    onClick={() => onNavigate(id)}
+                    onClick={() => isMockup ? alert(`The ${label} module is currently a mockup design and will be functional soon.`) : onNavigate(id)}
                     title={label}
                     style={{
                         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                        padding: '12px 10px', borderRadius: 14, cursor: 'pointer',
+                        padding: '12px 10px', borderRadius: 14, cursor: isMockup ? 'not-allowed' : 'pointer',
                         background: activeView === id ? 'rgba(78,205,196,0.25)' : 'transparent',
                         border: activeView === id ? '1px solid rgba(78,205,196,0.5)' : '1px solid transparent',
                         color: activeView === id ? '#4ecdc4' : 'rgba(255,255,255,0.5)',
                         transition: 'all 0.2s', position: 'relative', width: 60,
+                        opacity: isMockup ? 0.6 : 1, // Dim mockups slightly
                     }}>
                     <Icon size={22} />
                     <span style={{ fontSize: 9, fontWeight: 600 }}>{label}</span>
