@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useState as useStateAlias } from 'react';
+import { useState as useStateAlias, useMemo } from 'react';
 import { Search, Zap, RefreshCw, ShoppingBasket, Plus, Pencil, Trash2 } from 'lucide-react';
 import { defaultGroups, calcRequisition, resolveIngredients } from '../data/mockData';
 import StarRating from '../components/StarRating';
@@ -71,12 +71,13 @@ function IngredientRow({ ingredient, groups, useSubstitutions, onAddToCart, alre
     );
 }
 
+import { useKitchen } from '../context/KitchenContext';
+
 export default function RecipesView({
-    recipes, ingredientsCatalog,
     selectedRecipe, setSelectedRecipe,
-    cart, onAddToCart,
     onCreateNew, onEditRecipe, onDeleteRecipe,
 }) {
+    const { recipes, ingredients: ingredientsCatalog, cart, addToCart: onAddToCart } = useKitchen();
     const [search, setSearch] = useState('');
     const [groups, setGroups] = useState(defaultGroups);
     const [useSubstitutions, setUseSubstitutions] = useState(false);
@@ -103,9 +104,9 @@ export default function RecipesView({
     };
 
     // Resolve recipe ingredients → full objects (catalog data + recipe portions)
-    const resolvedIngredients = selectedRecipe
+    const resolvedIngredients = useMemo(() => selectedRecipe
         ? resolveIngredients(selectedRecipe, ingredientsCatalog)
-        : [];
+        : [], [selectedRecipe, ingredientsCatalog]);
 
     const firstIng = resolvedIngredients[0];
 

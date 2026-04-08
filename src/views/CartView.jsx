@@ -127,10 +127,18 @@ function PDFSuccessBanner({ fileName }) {
     );
 }
 
+import { useKitchen } from '../context/KitchenContext';
+
 // ── Componente principal ──────────────────────────────────────────────────────
 
 /** Vista principal del carrito de compras. */
-export default function CartView({ cart, suppliers = [], onRemove, onClearCart }) {
+export default function CartView() {
+    const {
+        cart,
+        suppliers = [],
+        removeFromCart: onRemove,
+        clearCart: onClearCart
+    } = useKitchen();
     const [generatingPDF, setGeneratingPDF] = useState(false);
     const [lastFileName, setLastFileName] = useState(null);
     const [vendorOpen, setVendorOpen] = useState(false);

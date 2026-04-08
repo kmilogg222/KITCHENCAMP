@@ -15,10 +15,22 @@
  *   remove: (id: string | number) => void,
  * }}
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-export function useCrudState(initialData = []) {
-    const [items, setItems] = useState(initialData);
+export function useCrudState(initialData = [], storageKey = null) {
+    const [items, setItems] = useState(() => {
+        if (storageKey) {
+            const stored = localStorage.getItem(storageKey);
+            if (stored) return JSON.parse(stored);
+        }
+        return initialData;
+    });
+
+    useEffect(() => {
+        if (storageKey) {
+            localStorage.setItem(storageKey, JSON.stringify(items));
+        }
+    }, [items, storageKey]);
 
     /** Agrega un nuevo elemento al final de la colección. */
     const add = (item) =>
