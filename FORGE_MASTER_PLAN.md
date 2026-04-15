@@ -19,7 +19,7 @@
 
 ### What It Solves
 
-Professional kitchens face a constant math problem: given a menu serving N kids + M adults + P seniors, exactly how many packs of each ingredient must be ordered from which suppliers?
+Professional kitchens face a constant math problem: given a menu serving N kids + M teens + P adults, exactly how many packs of each ingredient must be ordered from which suppliers?
 
 KitchenCalc automates the full workflow:
 1. **Inventory** — Catalog all ingredients with pack size, current stock, and supplier
@@ -200,10 +200,17 @@ KITCHENCAMP/
 **Purpose:** Manage recipe catalog; calculate single-recipe purchase requisitions.
 **Key features:**
 - Filterable recipe list (left panel) + detail panel (right)
-- Group inputs (A/B/C) to set diner counts
+- Group inputs (A/B/C) to set diner counts — Groups are: **A = Kids, B = Teens, C = Adults**
 - Requisition table per ingredient: stock / min order / packs to order / unit price
 - Add calculated items to cart
 - CRUD: create/edit/delete with double-confirm on delete
+
+**CreateRecipeView — ingredient slot features:**
+- **Mode toggle:** "Use existing" (pick from catalog) or "Create new" (inline form, adds to catalog on save)
+- **Input mode:** "Per person" (portionByGroup per demographic) or "Recipe batch" (total yield → auto-derives per-group portions via portionFactors)
+- **Portion unit selector:** For new ingredients, the unit is selectable inline (all INGREDIENT_UNITS). For existing catalog ingredients, the unit is shown as a read-only badge.
+- **Substitute picker:** When "Has substitute" checkbox is active, user can pick "From catalog" (select from ingredient list) or "Type manually" (free text). Stored as a string name either way.
+- **Waste factor (merma):** Optional checkbox per ingredient. When enabled, shows a `%` input (default 10%). The waste % is stored in the ingredient ref and applied in `calcRequisition` on top of the 10% safety margin.
 
 **Recipe data model:**
 ```js
@@ -215,10 +222,15 @@ KITCHENCAMP/
   image: string,             // emoji character
   description: string,
   isNew?: boolean,
+  baseServings?: number,     // required if any ingredient uses inputMode='yield'
+  portionFactors?: { A: number, B: number, C: number },  // multipliers vs. B (Teens=1.0 reference)
   ingredients: [
     {
       ingredientId: string,
-      portionByGroup: { A: number, B: number, C: number }  // grams per person
+      inputMode: 'per-person' | 'yield',
+      portionByGroup?: { A: number, B: number, C: number },  // g per person (per-person mode)
+      quantityForBase?: number,   // total quantity for baseServings (yield mode)
+      wastePct?: number,          // optional waste % applied on top of 10% safety margin
     }
   ]
 }
@@ -281,16 +293,19 @@ KITCHENCAMP/
 {
   id: string,
   name: string,
-  unit: 'g' | 'ml' | 'units' | 'kg' | 'L' | 'oz',
+  unit: 'g' | 'ml' | 'units' | 'kg' | 'L' | 'oz' | 'gal' | 'qt' | 'lb' | '1#',
   packSize: number,
   currentStock: number,      // in units of `unit`
   minOrder: number,          // minimum packs to order
   supplier: string,          // supplier name
   pricePerPack: number,
   substitutable: boolean,
-  substitute?: string
+  substitute?: string        // stored as ingredient name string (not ID)
 }
 ```
+
+**InventoryView — substitute picker:**
+When "Has substitute" is active in the ingredient modal, the user can toggle between "From catalog" (select from existing ingredients) and "Type manually" (free text). On load, if the stored `substitute` name matches a catalog ingredient, it opens in catalog mode; otherwise it opens in manual mode. The `substitute` field is always saved as a plain string name.
 
 ### 5.6 Suppliers (`SuppliersView.jsx`)
 **Route:** `/suppliers`
@@ -351,13 +366,18 @@ Located in [src/data/mockData.js](src/data/mockData.js).
 ### 6.1 Single Recipe Requisition
 
 ```
-D      = Σ ( portionByGroup[gId] × groups[gId].count )   // Raw demand
-D_safe = D × 1.10                                         // +10% safety margin
-R      = ⌈ D_safe / packSize ⌉                            // Packs to order (ceiling)
-order  = max( R - floor(currentStock / packSize), 0 )     // Minus current stock
+D           = Σ ( portionByGroup[gId] × groups[gId].count )   // Raw demand
+wasteFactor = 1 + (wastePct / 100)                            // Per-ingredient waste (default 1.0)
+D_safe      = D × 1.10 × wasteFactor                          // +10% safety margin + waste
+R           = ⌈ D_safe / packSize ⌉                           // Packs to order (ceiling)
+order       = max( R - floor(currentStock / packSize), 0 )    // Minus current stock
 ```
 
-**Function:** `calcRequisition(resolvedIngredient, groups) → { D, D_safe, R, packSize, unit }`
+**Function:** `calcRequisition(resolvedIngredient, groups) → { D, D_safe, R, packSize, unit, wastePct }`
+
+- `wastePct` is stored per ingredient **in the recipe ref** (not in the catalog). It is optional — absence means 0%.
+- `D_safe` compounds both the 10% kitchen safety margin and the ingredient-specific waste factor.
+- When the same ingredient appears in multiple recipes in a menu, the **highest** `wastePct` among all refs is used for the consolidated calculation.
 
 ### 6.2 Menu Consolidated Requisition
 
@@ -377,9 +397,10 @@ Then for each consolidated ingredient:
 
 | Function | Signature | Purpose |
 |----------|-----------|---------|
-| `resolveIngredients` | `(recipe, catalog) → enrichedIngredients[]` | Merges recipe ingredient refs with catalog data |
-| `calcRequisition` | `(ingredient, groups) → result` | Single ingredient requisition math |
-| `calcMenuRequisition` | `(menu, recipes, catalog, groups) → { consolidated, byRecipe }` | Full menu consolidation |
+| `resolveIngredients` | `(recipe, catalog) → enrichedIngredients[]` | Merges recipe ingredient refs with catalog data; carries `wastePct` from ref |
+| `resolvePortionByGroup` | `(ingredientRef, recipe) → { A, B, C }` | Resolves per-person portions for both per-person and yield-mode ingredients |
+| `calcRequisition` | `(ingredient, groups) → { D, D_safe, R, packSize, unit, wastePct }` | Single ingredient requisition math with waste factor |
+| `calcMenuRequisition` | `(menu, recipes, catalog, groups) → { consolidated, byRecipe }` | Full menu consolidation; aggregates `wastePct` using max across recipes |
 
 ---
 
@@ -525,5 +546,5 @@ npm run lint       # ESLint check
 
 ---
 
-*Last updated: 2026-04-13*
+*Last updated: 2026-04-14*
 *Maintainer: Kamilo G*

@@ -57,7 +57,7 @@ export const MEAL_SLOTS = [
 ];
 
 // ── Unidades disponibles para ingredientes ────────────────────────────────────
-export const INGREDIENT_UNITS = ['g', 'ml', 'units', 'kg', 'L', 'oz'];
+export const INGREDIENT_UNITS = ['g', 'ml', 'units', 'kg', 'L', 'oz', 'gal', 'qt', 'lb', '1#'];
 
 // ── Estilo base para inputs de formulario ─────────────────────────────────────
 // Reutilizable en cualquier modal/formulario sin repetir el objeto.

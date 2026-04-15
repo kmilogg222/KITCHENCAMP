@@ -203,6 +203,24 @@ export const recipes = [
             { ingredientId: 'ing-011', portionByGroup: { A: 20, B: 35, C: 25 } },    // Croutons
         ],
     },
+    {
+        id: 4,
+        name: 'Pasta Bolognese',
+        category: 'Main Course',
+        rating: 5,
+        image: '🍝',
+        isNew: false,
+        isCustom: false,
+        description: 'Rich meat-sauce pasta portioned from a large batch — yield mode demo',
+        baseServings: 20,
+        portionFactors: { A: 0.6, B: 1.0, C: 0.75 },
+        ingredients: [
+            // 2000g Fusilli Pasta for 20-serving batch → Adults: 100g, Kids: 60g, Seniors: 75g
+            { ingredientId: 'ing-002', inputMode: 'yield', quantityForBase: 2000 },
+            // 200ml Vegetable Oil for 20-serving batch → Adults: 10ml, Kids: 6ml, Seniors: 7.5ml
+            { ingredientId: 'ing-007', inputMode: 'yield', quantityForBase: 200 },
+        ],
+    },
 ];
 
 // ── SUPPLIERS ────────────────────────────────────────────────────────────────
@@ -245,8 +263,8 @@ export const menus = [
 // ── GROUPS ───────────────────────────────────────────────────────────────────
 export const defaultGroups = [
     { id: 'A', label: 'Group A', sublabel: 'Kids', color: '#4ecdc4', count: 0 },
-    { id: 'B', label: 'Group B', sublabel: 'Adults', color: '#6b3fa0', count: 0 },
-    { id: 'C', label: 'Group C', sublabel: 'Seniors', color: '#f59e0b', count: 0 },
+    { id: 'B', label: 'Group B', sublabel: 'Teens', color: '#6b3fa0', count: 0 },
+    { id: 'C', label: 'Group C', sublabel: 'Adults', color: '#f59e0b', count: 0 },
 ];
 
 // ── MATH ENGINE ──────────────────────────────────────────────────────────────
@@ -257,7 +275,8 @@ export const defaultGroups = [
 export function calcRequisition(resolvedIngredient, groups) {
     const portions = resolvedIngredient.portionByGroup;
     const D = groups.reduce((acc, g) => acc + g.count * (portions[g.id] ?? 0), 0);
-    const D_safe = D * 1.1;
+    const wasteFactor = 1 + (resolvedIngredient.wastePct || 0) / 100;
+    const D_safe = D * 1.1 * wasteFactor;
     const V = resolvedIngredient.packSize;
     const R = V > 0 ? Math.ceil(D_safe / V) : 0;
     return {
@@ -266,6 +285,37 @@ export function calcRequisition(resolvedIngredient, groups) {
         R,
         packSize: V,
         unit: resolvedIngredient.unit,
+        wastePct: resolvedIngredient.wastePct || 0,
+    };
+}
+
+// ── HELPER: resolve portionByGroup for a single ingredient ref ────────────────
+/**
+ * Resolves the effective portionByGroup for an ingredient reference.
+ *
+ * Two input modes:
+ *  - 'per-person' (default, backward-compat): returns ref.portionByGroup as-is.
+ *  - 'yield': derives per-group portions from quantityForBase + recipe portionFactors.
+ *
+ * @param {object} ingredientRef - { ingredientId, inputMode?, portionByGroup?, quantityForBase? }
+ * @param {object} recipe        - { baseServings?, portionFactors? }
+ * @returns {{ A: number, B: number, C: number }}
+ */
+export function resolvePortionByGroup(ingredientRef, recipe) {
+    if (!ingredientRef.inputMode || ingredientRef.inputMode === 'per-person') {
+        return ingredientRef.portionByGroup;
+    }
+    // yield mode — derive per-group portions from a batch quantity
+    const { baseServings, portionFactors } = recipe;
+    if (!ingredientRef.quantityForBase || ingredientRef.quantityForBase <= 0) {
+        console.warn('[resolvePortionByGroup] yield ingredient has quantityForBase <= 0:', ingredientRef.ingredientId);
+        return { A: 0, B: 0, C: 0 };
+    }
+    const perStandardPortion = ingredientRef.quantityForBase / Math.max(1, baseServings ?? 10);
+    return {
+        A: perStandardPortion * (portionFactors?.A ?? 0.6),
+        B: perStandardPortion * (portionFactors?.B ?? 1.0),
+        C: perStandardPortion * (portionFactors?.C ?? 0.75),
     };
 }
 
@@ -281,7 +331,7 @@ export function resolveIngredients(recipe, catalog) {
         .map(ref => {
             const ing = catalogIndex.get(ref.ingredientId);
             if (!ing) return null;
-            return { ...ing, portionByGroup: ref.portionByGroup };
+            return { ...ing, portionByGroup: resolvePortionByGroup(ref, recipe), wastePct: ref.wastePct || 0 };
         })
         .filter(Boolean);
 }
@@ -333,17 +383,23 @@ export function calcMenuRequisition(menu, allRecipes, catalog, groups) {
             const cat = catalogIndex.get(ref.ingredientId);
             if (!cat) return;
 
+            // Resolve to { A, B, C } before accumulating (supports yield mode refs)
+            const resolved = resolvePortionByGroup(ref, recipe);
+
             if (ingredientMap.has(ref.ingredientId)) {
                 const entry = ingredientMap.get(ref.ingredientId);
                 // Sum portions per group
-                Object.keys(ref.portionByGroup).forEach(gId => {
-                    entry.portionByGroup[gId] = (entry.portionByGroup[gId] || 0) + (ref.portionByGroup[gId] || 0);
+                Object.keys(resolved).forEach(gId => {
+                    entry.portionByGroup[gId] = (entry.portionByGroup[gId] || 0) + (resolved[gId] || 0);
                 });
+                // Use highest wastePct when same ingredient appears in multiple recipes
+                entry.wastePct = Math.max(entry.wastePct || 0, ref.wastePct || 0);
                 entry.usedInRecipes.push(recipe.name);
             } else {
                 ingredientMap.set(ref.ingredientId, {
                     ...cat,
-                    portionByGroup: { ...ref.portionByGroup },
+                    portionByGroup: { ...resolved },
+                    wastePct: ref.wastePct || 0,
                     usedInRecipes: [recipe.name],
                 });
             }

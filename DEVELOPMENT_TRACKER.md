@@ -44,6 +44,16 @@
 - [x] **Architecture documentation** — `rules.md`, `architecture.md`, `tasks.md`, `docs/GUIDE.md`
 - [x] **Master plan + tracker** — `FORGE_MASTER_PLAN.md`, `DEVELOPMENT_TRACKER.md` (this file)
 
+### UI/UX Improvements (2026-04-14)
+- [x] **New ingredient units** — Added `gal`, `qt`, `lb`, `1#` to `INGREDIENT_UNITS` in `theme.js`; propagates automatically to CreateRecipeView and InventoryView
+- [x] **Substitute catalog picker** — In CreateRecipeView (`IngredientSlot`) and InventoryView (`IngredientModal`): "Has substitute" now offers a toggle between "From catalog" (select from existing ingredients) and "Type manually" (free text); initializes to catalog mode if existing substitute value matches a catalog name
+- [x] **Demographic group rename** — Groups renamed from Kids/Adults/Seniors → **Kids/Teens/Adults** (Group A=Kids, B=Teens, C=Adults); updated in `mockData.js` `defaultGroups` + all labels in `CreateRecipeView.jsx`
+- [x] **Portion unit selector** — In CreateRecipeView, the unit displayed next to portion inputs is now: a read-only teal badge for existing catalog ingredients, or an inline `<select>` from `INGREDIENT_UNITS` for new inline ingredients
+- [x] **Waste factor per ingredient (merma)** — Optional "Waste factor" checkbox per ingredient slot in CreateRecipeView; when enabled defaults to 10%, shows a `%` number input and an "X% ordered extra" badge; stored as `wastePct` in the recipe ingredient ref; applied in the calc engine on top of the 10% safety margin
+
+### Bug Fixes (2026-04-14)
+- [x] **FIX — `supplierIds is not defined`** — `SUPPLIER_IDS` was computed in `CreateRecipeView` but never passed as a prop to `IngredientSlot`; fixed by adding `supplierIds` to the prop signature and the render call
+
 ---
 
 ## 🔄 In Progress
@@ -51,6 +61,23 @@
 | Task | Description | Status |
 |------|-------------|--------|
 | — | No active development tasks | Idle |
+
+---
+
+## ✅ Dual-Mode Bug Fixes (2026-04-14)
+
+> Correcciones post-implementación del modelo dual per-person / yield.
+
+- [x] **FIX 1 — All-zero portionByGroup silencioso** — `validate()` ahora rechaza A=0,B=0,C=0 explícito (no solo campos vacíos)
+- [x] **FIX 2 — quantityForBase whitespace/trim** — validación tightened + trim antes de `Number()` en `handleSave()`
+- [x] **FIX 3 — Guard defensivo en resolvePortionByGroup** — `console.warn` y retorno `{A:0,B:0,C:0}` si `quantityForBase <= 0` en datos legacy
+- [x] **FIX 4 — portionFactors A/C validados** — `validate()` bloquea factores `<= 0`; mensajes de error inline en Batch Settings card
+- [x] **FIX 5 — baseServings onChange guard** — estado nunca puede ser `< 1`; HTML `min={1}` reforzado en JS
+- [x] **FIX 6 — Receta sin ingredientes bloqueada** — `validate()` verifica `slots.length > 0`
+- [x] **FIX 7 — Ghost baseServings/portionFactors** — `handleSave()` usa spread condicional; solo se guarda si hay ingredientes yield
+- [x] **FIX 8 — Batch Settings card siempre visible** — reemplazado conditional render por opacity/pointerEvents con hint "activate" cuando inactivo
+- [x] **FIX 9 — Group B REFERENCE badge** — label de Adults incluye badge inline "REFERENCE"
+- [x] **FIX 10 — Seed recipe yield** — `Pasta Bolognese` (id:4) agregada a mockData.js con `inputMode: 'yield'` para demo y testing
 
 ---
 
@@ -121,6 +148,23 @@
 |---|-------------|------|----------|
 | — | No known bugs at this time | — | — |
 
+## 📐 Data Model — Ingredient Ref (Recipe)
+
+The `ingredients[]` array inside a recipe stores refs, not full catalog objects. Current shape:
+
+```js
+{
+  ingredientId: string,
+  inputMode: 'per-person' | 'yield',
+  portionByGroup?: { A: number, B: number, C: number },  // per-person mode
+  quantityForBase?: number,                               // yield mode
+  wastePct?: number,          // optional — absence = 0%; applied in calcRequisition
+}
+```
+
+- `wastePct` is **per recipe-ingredient** (same catalog ingredient can have different waste % in different recipes)
+- In menu consolidation, the highest `wastePct` wins when the same ingredient is shared across recipes
+
 ---
 
 ## 🔧 Technical Debt
@@ -164,5 +208,5 @@
 
 ---
 
-*Last updated: 2026-04-13*
+*Last updated: 2026-04-14*
 *Maintainer: Kamilo G*

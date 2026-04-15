@@ -50,6 +50,7 @@ function StockStepper({ value, onChange }) {
 // ── Add / Edit ingredient modal ───────────────────────────────────────────────
 function IngredientModal({ ingredient, supplierIds = [], onSave, onClose }) {
     const isNew = !ingredient.id;
+    const catalogIngredients = useStore(state => state.ingredients);
     const [form, setForm] = useState({
         name: ingredient.name ?? '',
         unit: ingredient.unit ?? 'g',
@@ -62,6 +63,11 @@ function IngredientModal({ ingredient, supplierIds = [], onSave, onClose }) {
         substitute: ingredient.substitute ?? '',
     });
     const [errors, setErrors] = useState({});
+    const initSubMode = () => {
+        if (!ingredient.substitute) return 'catalog';
+        return catalogIngredients.some(i => i.name === ingredient.substitute) ? 'catalog' : 'manual';
+    };
+    const [subMode, setSubMode] = useState(initSubMode);
 
     const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -155,11 +161,40 @@ function IngredientModal({ ingredient, supplierIds = [], onSave, onClose }) {
                 {/* Substitute */}
                 <div style={{ marginBottom: 20 }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#6b3fa0', fontWeight: 500, marginBottom: 6 }}>
-                        <input type="checkbox" checked={form.substitutable} onChange={e => set('substitutable', e.target.checked)} style={{ accentColor: '#4ecdc4', width: 15, height: 15 }} />
+                        <input type="checkbox" checked={form.substitutable} onChange={e => {
+                            set('substitutable', e.target.checked);
+                            if (!e.target.checked) set('substitute', '');
+                        }} style={{ accentColor: '#4ecdc4', width: 15, height: 15 }} />
                         Has a substitute
                     </label>
                     {form.substitutable && (
-                        <input value={form.substitute} onChange={e => set('substitute', e.target.value)} placeholder="Substitute name…" style={inputSx} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                                <button onClick={() => { setSubMode('catalog'); set('substitute', ''); }}
+                                    style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', fontWeight: 600,
+                                        background: subMode === 'catalog' ? 'linear-gradient(135deg,#6b3fa0,#3d1a78)' : 'rgba(107,63,160,0.1)',
+                                        color: subMode === 'catalog' ? 'white' : '#6b3fa0' }}>
+                                    From catalog
+                                </button>
+                                <button onClick={() => { setSubMode('manual'); set('substitute', ''); }}
+                                    style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', fontWeight: 600,
+                                        background: subMode === 'manual' ? 'linear-gradient(135deg,#4ecdc4,#38b2ac)' : 'rgba(78,205,196,0.1)',
+                                        color: subMode === 'manual' ? 'white' : '#4ecdc4' }}>
+                                    Type manually
+                                </button>
+                            </div>
+                            {subMode === 'catalog' ? (
+                                <select value={form.substitute} onChange={e => set('substitute', e.target.value)} style={inputSx}>
+                                    <option value="">— Select substitute —</option>
+                                    {catalogIngredients
+                                        .filter(i => i.id !== ingredient.id)
+                                        .map(i => <option key={i.id} value={i.name}>{i.name} ({i.unit})</option>)}
+                                </select>
+                            ) : (
+                                <input value={form.substitute} onChange={e => set('substitute', e.target.value)}
+                                    placeholder="Substitute name…" style={inputSx} />
+                            )}
+                        </div>
                     )}
                 </div>
 
