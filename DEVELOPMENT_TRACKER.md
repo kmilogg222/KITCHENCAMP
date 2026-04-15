@@ -8,13 +8,23 @@
 
 ## Current Sprint
 
-**Sprint Goal:** Documentación arquitectural completa + preparación para Phase 2
-**Started:** 2026-04-13
+**Sprint Goal:** Fase 3 completa — Supabase backend + Auth + optimistic updates
+**Started:** 2026-04-15
+**Completed:** 2026-04-15
 
 | Task | Owner | Status |
 |------|-------|--------|
-| Crear `FORGE_MASTER_PLAN.md` | AI Agent | ✅ Done |
-| Crear `DEVELOPMENT_TRACKER.md` | AI Agent | ✅ Done |
+| Instalar `@supabase/supabase-js` | AI Agent | ✅ Done |
+| Crear cliente singleton + feature flag `USE_SUPABASE` | AI Agent | ✅ Done |
+| Crear `001_initial_schema.sql` (7 tablas + RLS) | AI Agent | ✅ Done |
+| Ejecutar SQL en Supabase Dashboard | Usuario | ✅ Done |
+| Crear `.env.local` con credenciales | Usuario | ✅ Done |
+| Auth modal `AuthGate.jsx` + `useAuth.js` + `AuthContext.jsx` | AI Agent | ✅ Done |
+| Capa de datos `src/lib/db/` (8 módulos) | AI Agent | ✅ Done |
+| Refactorizar `useStore.js` con optimistic updates | AI Agent | ✅ Done |
+| `MigrationBanner.jsx` + migrar datos locales → DB | AI Agent | ✅ Done |
+| `Toast.jsx` sistema de notificaciones | AI Agent | ✅ Done |
+| Actualizar documentación (FORGE + TRACKER) | AI Agent | ✅ Done |
 
 ---
 
@@ -22,13 +32,47 @@
 
 > Módulos funcionales y probados en producción.
 
-### Core Infrastructure
-- [x] **Project setup** — React 19 + Vite 7 + TailwindCSS 4 + ESLint
-- [x] **Global state** — Zustand 5 store with `persist` middleware (localStorage key: `kitchencalc-store`)
-- [x] **Routing** — React Router v7 with `React.lazy()` code-splitting on all views
-- [x] **Error boundary** — `ErrorBoundary.jsx` wraps entire app, catches render errors
-- [x] **Design system** — `theme.js` tokens (COLORS, MEAL_SLOTS, INGREDIENT_UNITS, INPUT_STYLE)
-- [x] **Vercel deployment** — `vercel.json` SPA rewrite config
+### Backend / Auth — Supabase (2026-04-15)
+
+- [x] **`@supabase/supabase-js` instalado** — aprobado el 2026-04-15
+- [x] **`src/lib/db/client.js`** — cliente singleton de Supabase. Exporta `USE_SUPABASE` (feature flag basado en vars de entorno). Sin `.env.local` la app funciona exactamente igual que antes.
+- [x] **`supabase/migrations/001_initial_schema.sql`** — DDL completo: 7 tablas (`suppliers`, `ingredients`, `recipes`, `recipe_ingredients`, `menus`, `menu_recipes`, `calendar_events`), triggers `updated_at` en todas, RLS activado con policies explícitas de SELECT/INSERT/UPDATE/DELETE por `user_id`.
+- [x] **`src/lib/db/transform.js`** — `fetchAllUserData()` (fetch paralelo de las 7 tablas) + todos los mappers bidireccionales DB↔Store (snake_case↔camelCase). Reconstruye objetos anidados (`ingredients[]` en recipe, `recipeIds[]` en menu, `{YYYY-MM-DD: events[]}` en calendar).
+- [x] **`src/lib/db/suppliers.js`** — `insertSupplier`, `updateSupplierInDb`, `deleteSupplierFromDb`
+- [x] **`src/lib/db/ingredients.js`** — CRUD completo + `updateStockInDb`
+- [x] **`src/lib/db/recipes.js`** — CRUD con manejo de `recipe_ingredients` (rollback manual si falla el insert de junction table)
+- [x] **`src/lib/db/menus.js`** — CRUD con manejo de `menu_recipes` ordenada por `position`
+- [x] **`src/lib/db/calendar.js`** — insert/delete/`setForDate` (estrategia delete+insert por fecha)
+- [x] **`src/lib/db/migration.js`** — `migrateLocalDataToDb()`: migra datos de localStorage → Supabase respetando el orden de FKs, resolviendo IDs legacy (strings/enteros) a UUIDs. `hasLocalData()` + `isUserDbEmpty(userId)`.
+- [x] **`src/lib/db/index.js`** — re-exports públicos del módulo `db/`.
+
+### Auth UI (2026-04-15)
+
+- [x] **`src/hooks/useAuth.js`** — sesión, `signIn`, `signUp`, `signOut`. Hidrata el store en `SIGNED_IN` via `useStore.getState()` (imperativo, evita dependencias circulares). Ref guard contra doble-hidratación en StrictMode. Detecta si hay datos locales para migrar.
+- [x] **`src/hooks/AuthContext.jsx`** — `<AuthProvider>` ejecuta `useAuth()` una sola vez. `useAuthContext()` distribuye el estado a todos los hijos. Evita el deadlock de `gotrue-js` por suscripciones duplicadas.
+- [x] **`src/components/AuthGate.jsx`** — modal glass-card de login/signup con tabs Sign In / Sign Up, toggle mostrar contraseña, validación inline, error messages de Supabase. `SplashLoader` (spinner) mientras se verifica la sesión. Pasa directo si `USE_SUPABASE=false`.
+- [x] **`src/components/MigrationBanner.jsx`** — banner fijo en bottom que aparece si el usuario tiene datos en localStorage pero la DB está vacía. Botones: "Move to my account" (migra) o "Start Fresh" (borra localStorage).
+- [x] **`src/components/Toast.jsx`** — sistema de notificaciones de error/éxito/info. Auto-dismiss a 5s. Animación de entrada. Lee del store (`useStore`).
+
+### Store refactorizado (2026-04-15)
+
+- [x] **`src/store/useStore.js`** — Reescrito completamente:
+  - `USE_SUPABASE=true` → sin `persist`, datos inician vacíos, se llenan desde Supabase.
+  - `USE_SUPABASE=false` → `persist` middleware → localStorage (comportamiento original, retrocompatible).
+  - Todas las acciones CRUD son **async con optimistic update**: actualización local inmediata → persist en DB async → rollback + toast si error.
+  - `setCalendarEvents()`: detecta solo las fechas que cambiaron y sincroniza selectivamente.
+  - Estado de hidratación: `isHydrating`, `hydrationError`.
+  - Sistema de toasts interno: `toasts[]`, `addToast()`, `removeToast()`.
+  - `resetStore()` al logout: limpia todas las colecciones.
+  - Función auxiliar exportada: `setCurrentUserId(id)`.
+
+### App.jsx refactorizado (2026-04-15)
+
+- [x] **`src/App.jsx`** — nueva estructura:
+  - `<AuthProvider>` → `<AuthGate>` → `<BrowserRouter>` → `<AppContent>`
+  - `AppContent` muestra: `HydrationLoader` (spinner mientras carga), error UI con botón Retry, o las rutas normales.
+  - `<ToastContainer />` y `<MigrationBanner />` siempre disponibles globalmente.
+- [x] **`src/components/Sidebar.jsx`** — botón "Sign Out" al fondo del sidebar (solo visible con `USE_SUPABASE=true`). Usa `useAuthContext()` para `signOut`.
 
 ### Modules
 - [x] **Dashboard** — Bento layout with stats cards (recipes, menus, prep time) + 4 operational widgets (Today's Menu, Next Delivery, Low Inventory, Team Available)
@@ -117,12 +161,19 @@
   - "Team Available" widget is a static mockup
   - Connect to real data when Staff/Supplier delivery modules are built
 
+- [ ] **Vercel integration con Supabase**
+  - La integración de Vercel + Supabase inyecta env vars automáticamente en Vercel deployments
+  - `.env.local` sigue siendo necesario para desarrollo local
+  - Setup: Supabase Dashboard → Project Settings → Integrations → Vercel → Connect
+
+- [ ] **Dashboard real data integration**
+  - "Next Delivery" widget is a static mockup
+  - "Team Available" widget is a static mockup
+  - Connect to real data when Staff/Supplier delivery modules are built
+
 ### P3 — Low Priority / Future Phases
 
-- [ ] **Data persistence — Backend API**
-  - Replace localStorage with a real backend (Supabase recommended, no server to manage)
-  - localStorage is single-device; backend enables multi-user / multi-kitchen
-  - Architecture change: Zustand actions → API calls; loading/error states needed
+- [ ] **Multi-kitchen / multi-user** — La DB ya tiene `user_id` en todas las tablas. El diseño es compatible. Falta: UI de selección de kitchen, `kitchen_id` FK en tablas, RLS policies por kitchen.
 
 - [ ] **Budget Module** (mockup → real feature)
   - Track actual spend vs. estimated from Purchase Orders
@@ -154,7 +205,7 @@ The `ingredients[]` array inside a recipe stores refs, not full catalog objects.
 
 ```js
 {
-  ingredientId: string,
+  ingredientId: string,       // UUID (Supabase) o 'ing-NNN' (legacy localStorage)
   inputMode: 'per-person' | 'yield',
   portionByGroup?: { A: number, B: number, C: number },  // per-person mode
   quantityForBase?: number,                               // yield mode
@@ -164,6 +215,7 @@ The `ingredients[]` array inside a recipe stores refs, not full catalog objects.
 
 - `wastePct` is **per recipe-ingredient** (same catalog ingredient can have different waste % in different recipes)
 - In menu consolidation, the highest `wastePct` wins when the same ingredient is shared across recipes
+- En modo Supabase, `ingredientId` es UUID. El transform.js reconstruye este array desde `recipe_ingredients`.
 
 ---
 
@@ -174,9 +226,10 @@ The `ingredients[]` array inside a recipe stores refs, not full catalog objects.
 | # | Issue | File | Priority |
 |---|-------|------|----------|
 | 1 | `useCartManager.js` is fully implemented but **never used** — cart logic lives in Zustand instead. Should be removed after confirming no lingering import. | [src/hooks/useCartManager.js](src/hooks/useCartManager.js) | Low |
-| 2 | `mockData.js` mixes seed data (static) with calculation engine (pure functions). These should be in separate files: `seedData.js` and `calcEngine.js`. | [src/data/mockData.js](src/data/mockData.js) | Low |
+| 2 | `mockData.js` mixes seed data (static) with calculation engine (pure functions). These should be in separate files: `seedData.js` and `calcEngine.js`. En modo Supabase solo se usan las funciones puras. | [src/data/mockData.js](src/data/mockData.js) | Low |
 | 3 | `architecture.md` describes navigation as "state-driven (`activeView`), NOT URL-based" but the app now uses React Router. Document is outdated. | [architecture.md](architecture.md) | Low (FORGE_MASTER_PLAN.md is now authoritative) |
 | 4 | Initial bundle ~725 kB. Need to verify `React.lazy()` splits are working and analyze chunk sizes with `vite build --report`. | [src/App.jsx](src/App.jsx) | High |
+| 5 | `useCartManager.js` también debe actualizarse si se quiere persistir el carrito en Supabase en el futuro (actualmente el carrito es efímero intencional). | [src/hooks/useCartManager.js](src/hooks/useCartManager.js) | Low |
 
 ---
 
@@ -186,6 +239,13 @@ The `ingredients[]` array inside a recipe stores refs, not full catalog objects.
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-04-15 | **Supabase como backend (PostgreSQL + Auth + RLS)** | Sin servidor propio, Auth por email incluida, RLS garantiza aislamiento por usuario sin errores de aplicación |
+| 2026-04-15 | **Feature flag `USE_SUPABASE`** | Permite trabajar sin credenciales (retrocompatibilidad localStorage). Facilitará pruebas sin red y onboarding de contribuidores |
+| 2026-04-15 | **Optimistic updates en todas las acciones CRUD** | UX inmediata; rollback automático si la DB falla. El usuario no espera a la red para ver el resultado |
+| 2026-04-15 | **`AuthContext.jsx` con `useAuth()` ejecutado una sola vez** | Evita el deadlock de `gotrue-js` causado por suscripciones duplicadas en React 19 StrictMode (double-mount) |
+| 2026-04-15 | **`useStore.getState()` imperativo en `useAuth`** | Evita dependencias circulares entre el hook de auth y el store. El store no conoce a `useAuth`, mantiene separación de concerns |
+| 2026-04-15 | **`persist` condicional en Zustand** | Cuando Supabase está activo, localStorage no es la fuente de verdad; `persist` causaría estado stale al cambiar de usuario |
+| 2026-04-15 | **`user_id` denormalizado en junction tables** | Permite RLS sin joins costosos. RLS policy de Supabase es una expresión simple: `auth.uid() = user_id` |
 | 2026-04-07 | **Migrate from `activeView` state to React Router v7** | Enables browser back/forward, bookmarkable URLs, and `React.lazy()` route-level code splitting |
 | 2026-04-07 | **Adopt Zustand over `useCrudState` for global state** | Zustand's `persist` middleware handles localStorage serialization automatically; eliminates manual key management per collection |
 | 2026-04-07 | **No TypeScript** | Project owner preference; keep barrier to entry low for contributors |
@@ -201,12 +261,15 @@ The `ingredients[]` array inside a recipe stores refs, not full catalog objects.
 
 | Metric | Value | Date | Target |
 |--------|-------|------|--------|
-| Production bundle size | ~725 kB | 2026-04-03 | < 200 kB |
+| Production bundle size | ~481 kB | 2026-04-15 | < 200 kB |
 | Views lazy-loaded | All 9 views | 2026-04-07 | ✅ Done |
-| localStorage key | `kitchencalc-store` | 2026-04-07 | — |
-| Vercel deploy | Active | 2026-04-03 | — |
+| Supabase DB tables | 7 tablas con RLS | 2026-04-15 | ✅ Done |
+| Auth provider | Supabase email+password | 2026-04-15 | ✅ Done |
+| localhost persistencia | `.env.local` requerido | 2026-04-15 | ✅ Done |
+| Vercel deploy | Pendiente integración Supabase | 2026-04-15 | Ver §Backlog |
 
 ---
 
-*Last updated: 2026-04-14*
+*Last updated: 2026-04-15*
 *Maintainer: Kamilo G*
+*Fase 3 completada — ver `agent-sessions/2026-04-14_execution-plan-supabase-migration.md`*

@@ -1,8 +1,9 @@
 # Plan de Ejecución: Migración a Supabase — KitchenCalc
 
-**Fecha:** 2026-04-14
+**Fecha:** 2026-04-14 (actualizado 2026-04-14 v2)
 **Basado en:** `agent-sessions/2026-04-14_database-migration-plan.md`
 **Propósito:** Análisis crítico del plan original + plan de ejecución detallado paso a paso para un agente implementador.
+**Revisiones:** v2 — incorpora observaciones sobre import/export CSV/Excel, estructura modular de la capa de datos, Zustand slices, Realtime subs, y extensibilidad general.
 
 ---
 
@@ -95,6 +96,79 @@ El plan dice "modal de login/signup que envuelve la app" y menciona "email + pas
 - **Google OAuth** podría ser una opción rápida adicional.
 
 **Recomendación:** Email + password como método principal, con la posibilidad de agregar OAuth más adelante.
+
+#### PROBLEMA 11: `dbQueries.js` se convertirá en un monolito
+
+El plan propone un solo archivo `src/lib/dbQueries.js` para todas las funciones de lectura y escritura. Con 7 entidades actuales (suppliers, ingredients, recipes, recipe_ingredients, menus, menu_recipes, calendar_events) y las futuras (budget, staff, activity), el archivo superará 600+ líneas rápidamente.
+
+**Recomendación:** Estructurar como carpeta de módulos desde el primer día:
+```
+src/lib/db/
+  index.js          ← re-exports públicos
+  client.js          ← cliente singleton (actual supabase.js)
+  suppliers.js       ← CRUD de suppliers
+  ingredients.js     ← CRUD de ingredients
+  recipes.js         ← CRUD de recipes + recipe_ingredients
+  menus.js           ← CRUD de menus + menu_recipes
+  calendar.js        ← CRUD de calendar_events
+  migration.js       ← migrateLocalDataToDb()
+  transform.js       ← transformDbToStoreShape() + transformStoreToDbShape()
+```
+Cada módulo importa el client de `./client.js`. `index.js` re-exporta todo para que los consumers sigan importando desde `'../lib/db'`.
+
+#### PROBLEMA 12: El store crecerá sin control con nuevas entidades
+
+Actualmente `useStore.js` tiene ~90 líneas con 6 colecciones y ~20 acciones. Con Supabase (acciones async, hydrate, loading states) y futuras entidades (budget, staff, activity), superará 300+ líneas.
+
+**Recomendación:** Usar **Zustand slices** desde la migración:
+```js
+// src/store/slices/ingredientsSlice.js
+export const createIngredientsSlice = (set, get) => ({
+  ingredients: [],
+  addIngredient: async (ing) => { /* ... */ },
+  updateIngredient: async (updatedIng) => { /* ... */ },
+  deleteIngredient: async (id) => { /* ... */ },
+});
+
+// src/store/useStore.js
+import { createIngredientsSlice } from './slices/ingredientsSlice';
+import { createRecipesSlice } from './slices/recipesSlice';
+// ...
+export const useStore = create((...a) => ({
+  ...createIngredientsSlice(...a),
+  ...createRecipesSlice(...a),
+  // ...
+}));
+```
+Esto permite agregar budget, staff, activity como slices independientes sin tocar los existentes.
+
+#### PROBLEMA 13: No se contempla Import/Export de datos (CSV/Excel)
+
+Para un sistema de cocina profesional, la capacidad de exportar e importar datos (ingredientes, recetas, inventarios, proveedores) es esencial para:
+- Backup manual de datos
+- Compartir recetas entre cocinas/usuarios
+- Migración desde otros sistemas
+- Reportes impresos
+
+El modelo de datos tiene **3 niveles de complejidad** para exportar:
+
+| Nivel | Entidades | Problema | Solución |
+|-------|-----------|----------|----------|
+| Fácil | suppliers, ingredients | Tablas planas | CSV directo |
+| Moderado | menus | Lista de recetas (`recipeIds[]`) | Columna con valores separados por `\|` o segunda hoja Excel |
+| Complejo | recipes + recipe_ingredients | JSONB (`portionByGroup`, `portionFactors`) + modo dual (per-person/yield) | Excel multi-hoja (Sheet Recetas + Sheet Ingredientes) o 2 CSVs pareados |
+
+**Problemas concretos al importar:**
+
+| Problema | Solución |
+|----------|----------|
+| `portionByGroup` / `portionFactors` son objetos JSONB | Excel 2 hojas, o 2 CSVs separados |
+| `inputMode` dual cambia qué campos aplican | Columna `inputMode` + columnas condicionales vacías |
+| `supplier` name → UUID al importar | Lookup por nombre; si no existe → crear automáticamente o error claro |
+| Recipe name → UUID al importar menús | Lookup por nombre exacto |
+| ¿Duplicado o update si ya existe? | Definir estrategia: upsert por nombre vs crear nuevo |
+
+**Diseño compatible:** La arquitectura modular del `src/lib/db/` facilita esto — las funciones de import/export van en módulos propios (`export.js`, `import.js`) sin tocar el store ni las views. La lógica de `transform.js` (que ya aplana/anida datos entre DB y store) se reutiliza en sentido inverso para el export.
 
 ---
 
@@ -322,9 +396,30 @@ Desde el SQL Editor, hacer un `SELECT * FROM ingredients;` como usuario anónimo
 
 > **Objetivo:** Al hacer login, la app hidrata el store desde Supabase en lugar de usar solo localStorage.
 
-#### Paso 3.1 — Crear `src/lib/dbQueries.js`
+#### Paso 3.1 — Crear carpeta `src/lib/db/` con módulos por entidad
 
-Funciones organizadas por entidad para leer datos del usuario:
+Estructura de la carpeta:
+```
+src/lib/db/
+  index.js          ← re-exports públicos
+  client.js          ← supabase client singleton (mover de src/lib/supabase.js)
+  suppliers.js       ← fetchSuppliers, insertSupplier, updateSupplier, deleteSupplier
+  ingredients.js     ← fetchIngredients, insertIngredient, updateIngredient, deleteIngredient
+  recipes.js         ← fetchRecipes, insertRecipeWithIngredients, updateRecipeWithIngredients, deleteRecipe
+  menus.js           ← fetchMenus, insertMenuWithRecipes, updateMenuWithRecipes, deleteMenu
+  calendar.js        ← fetchCalendarEvents, insertCalendarEvent, deleteCalendarEvent, setCalendarEventsForDate
+  migration.js       ← migrateLocalDataToDb()
+  transform.js       ← transformDbToStoreShape(), snake↔camel mappers
+```
+
+El punto de entrada `index.js` re-exporta las funciones que el store necesita:
+```js
+export { fetchAllUserData } from './transform';
+export { insertSupplier, updateSupplierInDb, deleteSupplierFromDb } from './suppliers';
+// ... etc
+```
+
+La función principal de lectura `fetchAllUserData` vive en `transform.js`:
 
 ```js
 /**
@@ -441,67 +536,114 @@ export async function migrateLocalDataToDb(userId) {
 
 > **Objetivo:** Cada acción de CRUD en el store persiste en Supabase. El UI se actualiza inmediatamente (optimistic) y hace rollback si falla.
 
-#### Paso 4.1 — Crear helpers en `dbQueries.js` para cada operación de escritura
+#### Paso 4.1 — Implementar funciones de escritura en cada módulo de `src/lib/db/`
 
-Funciones CRUD por entidad:
+Cada módulo ya creado en el Paso 3.1 debe contener sus funciones CRUD. Ejemplo `suppliers.js`:
 ```js
-// Suppliers
-export async function insertSupplier(supplier) { ... }
+import { supabase } from './client';
+
+export async function insertSupplier(supplier) {
+  const { data, error } = await supabase.from('suppliers').insert(supplier).select().single();
+  return { data, error };
+}
 export async function updateSupplierInDb(id, updates) { ... }
 export async function deleteSupplierFromDb(id) { ... }
+```
 
-// Ingredients
-export async function insertIngredient(ingredient) { ... }
-export async function updateIngredientInDb(id, updates) { ... }
-export async function deleteIngredientFromDb(id) { ... }
-
-// Recipes (+ recipe_ingredients en transacción)
+Modules con relaciones complejas, ej `recipes.js`:
+```js
 export async function insertRecipeWithIngredients(recipe, ingredients) { ... }
 export async function updateRecipeWithIngredients(recipeId, recipe, ingredients) { ... }
 export async function deleteRecipeFromDb(id) { ... }
-
-// Menus (+ menu_recipes en transacción)
-export async function insertMenuWithRecipes(menu, recipeIds) { ... }
-export async function updateMenuWithRecipes(menuId, menu, recipeIds) { ... }
-export async function deleteMenuFromDb(id) { ... }
-
-// Calendar Events
-export async function insertCalendarEvent(event) { ... }
-export async function deleteCalendarEventFromDb(id) { ... }
-export async function setCalendarEventsForDate(date, events) { ... }
 ```
 
-**Transformación JS → DB:** Cada función debe convertir camelCase a snake_case y resolver las relaciones (ej: `supplier` name → `supplier_id`).
+`menus.js`, `calendar.js`, `ingredients.js` — mismo patrón.
 
-#### Paso 4.2 — Modificar `useStore.js` — patrón optimistic update
+**Transformación JS → DB:** Cada módulo usa helpers de `transform.js` para convertir camelCase → snake_case y resolver relaciones (ej: `supplier` name → `supplier_id`).
 
-Convertir cada acción síncrona en async con el patrón:
+#### Paso 4.2 — Refactorizar `useStore.js` con slices + patrón optimistic update
+
+Estructurar el store con **Zustand slices** para evitar un archivo monolítico:
+```
+src/store/
+  useStore.js              ← composición de slices
+  slices/
+    ingredientsSlice.js    ← estado + acciones async de ingredients
+    recipesSlice.js        ← estado + acciones async de recipes
+    menusSlice.js          ← estado + acciones async de menus
+    suppliersSlice.js      ← estado + acciones async de suppliers
+    calendarSlice.js       ← estado + acciones async de calendar
+    cartSlice.js           ← estado de cart (ephemeral, sin DB)
+    uiSlice.js             ← isHydrating, hydrationError, toasts[]
+```
+
+Cada slice sigue el patrón optimistic update:
 
 ```js
-addIngredient: async (ing) => {
-  // 1. Optimistic: actualizar UI inmediatamente con temp ID
-  const tempId = `temp-${Date.now()}`;
-  const optimistic = { ...ing, id: tempId };
-  set(state => ({ ingredients: [...state.ingredients, optimistic] }));
+// src/store/slices/ingredientsSlice.js
+import { insertIngredient } from '../../lib/db';
+import { USE_SUPABASE } from '../../lib/db/client';
 
-  // 2. Persistir en DB
-  const { data, error } = await insertIngredient({
-    ...ing,
-    user_id: supabase.auth.getUser().then(u => u.data.user.id),
-  });
+export const createIngredientsSlice = (set, get) => ({
+  ingredients: [],
 
-  if (error) {
-    // 3a. Rollback
-    set(state => ({ ingredients: state.ingredients.filter(i => i.id !== tempId) }));
-    // Mostrar error en UI (toast o similar)
-    console.error('Failed to save ingredient:', error.message);
-  } else {
-    // 3b. Reemplazar temp ID con el real
-    set(state => ({
-      ingredients: state.ingredients.map(i => i.id === tempId ? data : i)
-    }));
-  }
-},
+  addIngredient: async (ing) => {
+    if (!USE_SUPABASE) {
+      // Fallback localStorage — comportamiento original
+      set(state => ({ ingredients: [...state.ingredients, ing] }));
+      return;
+    }
+
+    // 1. Optimistic: actualizar UI inmediatamente con temp ID
+    const tempId = `temp-${Date.now()}`;
+    const optimistic = { ...ing, id: tempId };
+    set(state => ({ ingredients: [...state.ingredients, optimistic] }));
+
+    // 2. Persistir en DB
+    const { data, error } = await insertIngredient(ing);
+
+    if (error) {
+      // 3a. Rollback
+      set(state => ({ ingredients: state.ingredients.filter(i => i.id !== tempId) }));
+      // Agregar toast de error
+      const addToast = get().addToast;
+      addToast?.({ type: 'error', message: `Failed to save ingredient: ${error.message}` });
+    } else {
+      // 3b. Reemplazar temp ID con el real
+      set(state => ({
+        ingredients: state.ingredients.map(i => i.id === tempId ? data : i)
+      }));
+    }
+  },
+  // updateIngredient, deleteIngredient — mismo patrón
+});
+```
+
+`useStore.js` compone todos los slices:
+```js
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { USE_SUPABASE } from '../lib/db/client';
+import { createIngredientsSlice } from './slices/ingredientsSlice';
+import { createRecipesSlice } from './slices/recipesSlice';
+// ... demás slices
+
+const storeCreator = (...a) => ({
+  ...createIngredientsSlice(...a),
+  ...createRecipesSlice(...a),
+  ...createMenusSlice(...a),
+  ...createSuppliersSlice(...a),
+  ...createCalendarSlice(...a),
+  ...createCartSlice(...a),
+  ...createUiSlice(...a),
+  hydrate: (data) => a[0](data),  // set() all data from DB
+});
+
+export const useStore = create(
+  USE_SUPABASE
+    ? storeCreator
+    : persist(storeCreator, { name: 'kitchencalc-store', version: 1 })
+);
 ```
 
 **Complejidad especial — Recipes:**
@@ -575,9 +717,9 @@ Si `fetchAllUserData()` falla, mostrar un estado de error con botón "Retry" en 
 
 Secciones a actualizar:
 - §3 Tech Stack: agregar `@supabase/supabase-js`
-- §4.1 Directory Structure: agregar `src/lib/`, actualizar hooks
+- §4.1 Directory Structure: agregar `src/lib/db/`, `src/store/slices/`, actualizar hooks
 - §4.2 Data Flow: nuevo diagrama con Supabase
-- §7 Global Store Schema: acciones async, hydrate, loading states
+- §7 Global Store Schema: acciones async, hydrate, loading states, Zustand slices
 - §10 Roadmap: marcar Phase 3 como IN PROGRESS/COMPLETE
 
 #### Paso 5.6 — Actualizar `DEVELOPMENT_TRACKER.md`
@@ -651,14 +793,28 @@ CREATE TABLE kitchen_members (
 |---------|--------|------|
 | `.env.local` | CREAR | 0 |
 | `.gitignore` | VERIFICAR | 0 |
-| `src/lib/supabase.js` | CREAR | 0 |
+| `src/lib/db/client.js` | CREAR (supabase singleton) | 0 |
 | `src/hooks/useAuth.js` | CREAR | 1 |
 | `src/components/AuthGate.jsx` | CREAR | 1 |
 | `src/App.jsx` | MODIFICAR | 1 |
 | `src/components/Sidebar.jsx` | MODIFICAR (logout button) | 1 |
 | `supabase/migrations/001_initial_schema.sql` | CREAR | 2 |
-| `src/lib/dbQueries.js` | CREAR | 3 |
-| `src/store/useStore.js` | MODIFICAR (hydrate + async actions) | 3-4 |
+| `src/lib/db/index.js` | CREAR (re-exports) | 3 |
+| `src/lib/db/transform.js` | CREAR (DB ↔ Store shape) | 3 |
+| `src/lib/db/suppliers.js` | CREAR (CRUD suppliers) | 3-4 |
+| `src/lib/db/ingredients.js` | CREAR (CRUD ingredients) | 3-4 |
+| `src/lib/db/recipes.js` | CREAR (CRUD recipes + recipe_ingredients) | 3-4 |
+| `src/lib/db/menus.js` | CREAR (CRUD menus + menu_recipes) | 3-4 |
+| `src/lib/db/calendar.js` | CREAR (CRUD calendar_events) | 3-4 |
+| `src/lib/db/migration.js` | CREAR (localStorage → DB) | 3 |
+| `src/store/useStore.js` | REFACTORIZAR (composición de slices) | 3-4 |
+| `src/store/slices/ingredientsSlice.js` | CREAR | 4 |
+| `src/store/slices/recipesSlice.js` | CREAR | 4 |
+| `src/store/slices/menusSlice.js` | CREAR | 4 |
+| `src/store/slices/suppliersSlice.js` | CREAR | 4 |
+| `src/store/slices/calendarSlice.js` | CREAR | 4 |
+| `src/store/slices/cartSlice.js` | CREAR | 4 |
+| `src/store/slices/uiSlice.js` | CREAR (hydrating, toasts) | 4-5 |
 | `src/components/MigrationBanner.jsx` | CREAR | 3 |
 | `src/components/Toast.jsx` | CREAR | 4 |
 | `src/components/DataLoader.jsx` | CREAR (opcional) | 5 |
@@ -670,15 +826,111 @@ CREATE TABLE kitchen_members (
 ## PARTE 5: REGLAS PARA EL AGENTE IMPLEMENTADOR
 
 1. **Leer** `FORGE_MASTER_PLAN.md` y `DEVELOPMENT_TRACKER.md` antes de cualquier modificación.
-2. **NO agregar dependencias** sin aprobación explícita (`@supabase/supabase-js` es la única nueva).
-3. **Mantener retrocompatibilidad** — la app debe funcionar sin Supabase configurado (feature flag).
+2. **NO agregar dependencias** sin aprobación explícita (`@supabase/supabase-js` es la única nueva aprobada para esta migración).
+3. **Mantener retrocompatibilidad** — la app debe funcionar sin Supabase configurado (feature flag `USE_SUPABASE`).
 4. **No romper el calc engine** (`mockData.js`) — la lógica de cálculo es independiente de la DB.
 5. **Respetar naming conventions** — JSDoc en español, código en inglés, camelCase en JS, snake_case en DB.
 6. **Verificar compilación** (`npm run build`) después de cada fase.
 7. **No hacer git commit/push** sin instrucción explícita del usuario.
-8. **Las views NO deben saber sobre Supabase** — toda la interacción con la DB ocurre en el store y en `dbQueries.js`. Las views siguen usando `useStore()` exactamente igual.
+8. **Las views NO deben saber sobre Supabase** — toda la interacción con la DB ocurre en los slices del store y en `src/lib/db/`. Las views siguen usando `useStore()` exactamente igual.
+9. **Un módulo por entidad** — no crear archivos monolíticos. Cada entidad tiene su propio módulo en `src/lib/db/` y su propio slice en `src/store/slices/`.
+10. **Diseñar para extensibilidad** — cada nueva entidad futura (budget, staff, activity, import/export) debe poder agregarse como: nueva tabla SQL + nuevo módulo en `db/` + nuevo slice en `store/slices/`, sin modificar archivos existentes.
+
+---
+
+## PARTE 6: EXTENSIBILIDAD Y FUNCIONES FUTURAS
+
+> Esta sección documenta funcionalidades futuras que NO se implementan ahora, pero cuyo diseño debe ser compatible con la arquitectura de las Fases 0-5.
+
+### 6.1 Import / Export de datos (CSV / Excel)
+
+**Objetivo futuro:** Permitir al usuario exportar e importar ingredientes, recetas, inventarios, proveedores y menús.
+
+**Arquitectura propuesta:**
+```
+src/lib/db/
+  export.js      ← exportToCSV(), exportToExcel()
+  import.js      ← importFromCSV(), importFromExcel(), validateImportData()
+```
+
+**Complejidad por entidad:**
+
+| Entidad | Complejidad export | Formato recomendado | Notas |
+|---------|-------------------|---------------------|-------|
+| Suppliers | ✅ Fácil | CSV plano | Tabla plana directa |
+| Ingredients | ✅ Fácil | CSV plano | Resolver `supplier_id` → name al exportar, name → `supplier_id` al importar |
+| Menus | 🟡 Moderado | CSV con `recipeIds` como `name1\|name2` | O segunda hoja Excel |
+| Recipes | 🔴 Complejo | Excel multi-hoja | Sheet 1: datos de receta. Sheet 2: ingredientes con `inputMode`, `portionByGroup` (A,B,C como columnas), `quantityForBase` |
+| Calendar Events | 🟡 Moderado | CSV (date, slot, type, item_name) | Resolver recipe/menu name ↔ UUID |
+
+**Formato Excel para recetas (propuesta):**
+
+*Sheet 1 — Recipes:*
+| name | category | description | image | rating | baseServings | portionFactor_A | portionFactor_B | portionFactor_C |
+|------|----------|-------------|-------|--------|--------------|-----------------|-----------------|------------------|
+| Chicken Piccata | Main Course | Classic Italian... | 🍗 | 4 | | | | |
+| Pasta Bolognese | Main Course | Rich meat-sauce... | 🍝 | 5 | 20 | 0.6 | 1.0 | 0.75 |
+
+*Sheet 2 — Recipe Ingredients:*
+| recipe_name | ingredient_name | inputMode | portion_A | portion_B | portion_C | quantityForBase | wastePct |
+|-------------|-----------------|-----------|-----------|-----------|-----------|-----------------|----------|
+| Chicken Piccata | Chicken Breast | per-person | 120 | 200 | 150 | | 0 |
+| Pasta Bolognese | Fusilli Pasta | yield | | | | 2000 | 0 |
+
+**Estrategia de importación:**
+- **Lookup por nombre:** Al importar, resolver names → UUIDs. Si un ingredient/recipe no existe → opción de crear automáticamente o error.
+- **Duplicados:** Definir estrategia configurable: `upsert by name` (actualiza si existe) vs `create new` (siempre crea).
+- **Validación previa:** `validateImportData()` verifica estructura, tipos y referencias antes de insertar. Muestra preview de cambios al usuario.
+
+**Reutilización del código:** `transform.js` ya contiene la lógica de conversión DB ↔ Store. Para export/import se extiende con `transformStoreToExcel()` y `transformExcelToDb()`.
+
+**Dependencia futura:** Librería como `xlsx` o `exceljs` para generación de Excel. Requiere aprobación del usuario cuando se implemente.
+
+### 6.2 Supabase Realtime (colaboración multi-usuario)
+
+**Problema:** Si dos chefs usan la misma cuenta (o la misma kitchen en multi-kitchen), los cambios de uno no se ven en la sesión del otro en tiempo real.
+
+**Solución futura:** Supabase tiene **Realtime subscriptions** que permiten escuchar cambios en tablas:
+```js
+// Ejemplo futuro en un slice o hook
+const channel = supabase
+  .channel('ingredients-changes')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'ingredients' },
+    (payload) => {
+      // Actualizar store automáticamente cuando otro usuario hace cambios
+      switch (payload.eventType) {
+        case 'INSERT': get().addIngredientLocal(payload.new); break;
+        case 'UPDATE': get().updateIngredientLocal(payload.new); break;
+        case 'DELETE': get().removeIngredientLocal(payload.old.id); break;
+      }
+    }
+  )
+  .subscribe();
+```
+
+**No implementar ahora** — requiere multi-kitchen (Fase 6) primero. Pero el patrón de slices ya separa las acciones locales de las persistidas, facilitando la integración.
+
+### 6.3 Funciones que se agregan sin conflicto (post-migración)
+
+| Función | Módulos nuevos | Impacto en existentes |
+|---------|---------------|----------------------|
+| Import/Export CSV/Excel | `db/export.js`, `db/import.js` + view/modal | Ninguno |
+| Budget Module | `db/budget.js`, `slices/budgetSlice.js`, `BudgetView.jsx` | Solo habilitar botón en Sidebar |
+| Staff Module | `db/staff.js`, `slices/staffSlice.js`, `StaffView.jsx` | Solo habilitar botón en Sidebar |
+| Activity / Audit Log | `db/activity.js`, `slices/activitySlice.js` | Ninguno |
+| Fotos de recetas | Supabase Storage + columna `image_url` en `recipes` | Migrar emoji → URL en transform |
+| Historial/versiones de recetas | Tabla `recipe_versions` + módulo | Ninguno |
+
+### 6.4 Funciones que requieren cambios invasivos
+
+| Función | Cambio requerido | Magnitud |
+|---------|-----------------|----------|
+| Multi-kitchen / roles | Fase 6 de este plan — cambiar RLS en TODAS las tablas | 🔴 Grande |
+| Offline-first / PWA | Reemplazar optimistic updates por cola de operaciones pendientes + sync engine | 🔴 Grande |
+| Migración a TypeScript | Tipar todos los slices, módulos DB, y componentes | 🟡 Gradual |
 
 ---
 
 *Plan de ejecución creado: 2026-04-14*
+*v2 actualizado: 2026-04-14 — incorpora observaciones sobre import/export, modularidad y extensibilidad*
 *Basado en análisis crítico del plan de migración original*

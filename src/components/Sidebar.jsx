@@ -11,14 +11,17 @@
  *  - cartCount  {number}   - Número de ítems en el carrito (para el badge).
  */
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChefHat, Calendar, Package, Truck, ShoppingCart, ClipboardList, Calculator, Activity, Users } from 'lucide-react';
+import { ChefHat, Calendar, Package, Truck, ShoppingCart, ClipboardList, Calculator, Activity, Users, LogOut } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { useAuthContext } from '../hooks/AuthContext';
+import { USE_SUPABASE } from '../lib/db/client';
 
 export default function Sidebar() {
-    const navigate = useNavigate();
-    const location = useLocation();
-    const cart = useStore(state => state.cart);
-    const cartCount = cart.reduce((sum, item) => sum + item.packs, 0);
+    const navigate    = useNavigate();
+    const location    = useLocation();
+    const cart        = useStore(state => state.cart);
+    const cartCount   = cart.reduce((sum, item) => sum + item.packs, 0);
+    const { signOut } = useAuthContext();
     
     // Extract the active section from the URL path (e.g. "/recipes/create" -> "recipes")
     const activeView = location.pathname.split('/')[1] || 'dashboard';
@@ -81,6 +84,38 @@ export default function Sidebar() {
                     )}
                 </button>
             ))}
+
+            {/* Spacer para empujar el botón de logout al fondo */}
+            <div style={{ flex: 1 }} />
+
+            {/* Botón de logout — solo visible cuando Supabase está configurado */}
+            {USE_SUPABASE && (
+                <button
+                    onClick={async () => { await signOut(); }}
+                    title="Sign Out"
+                    style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                        padding: '12px 10px', borderRadius: 14, cursor: 'pointer',
+                        background: 'transparent',
+                        border: '1px solid transparent',
+                        color: 'rgba(255,255,255,0.4)',
+                        transition: 'all 0.2s', width: 60,
+                    }}
+                    onMouseEnter={e => {
+                        e.currentTarget.style.color = '#ef4444';
+                        e.currentTarget.style.background = 'rgba(239,68,68,0.12)';
+                        e.currentTarget.style.borderColor = 'rgba(239,68,68,0.3)';
+                    }}
+                    onMouseLeave={e => {
+                        e.currentTarget.style.color = 'rgba(255,255,255,0.4)';
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.borderColor = 'transparent';
+                    }}
+                >
+                    <LogOut size={20} />
+                    <span style={{ fontSize: 9, fontWeight: 600 }}>Sign Out</span>
+                </button>
+            )}
         </aside>
     );
 }

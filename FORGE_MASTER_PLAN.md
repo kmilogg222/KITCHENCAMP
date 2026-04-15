@@ -56,12 +56,18 @@ KitchenCalc automates the full workflow:
 | Language | JavaScript (JSX) | ES2022+ | No TypeScript |
 | Icons | lucide-react | 0.575.0 | Icon library |
 | PDF | jsPDF | 4.2.0 | Purchase Order generation |
-| Global State | Zustand | 5.0.12 | Persistent global store |
+| Global State | Zustand | 5.0.12 | Persistent global store (optimistic updates) |
 | Routing | react-router-dom | 7.14.0 | URL-based navigation + code splitting |
+| **Backend / Auth** | **@supabase/supabase-js** | **latest** | **PostgreSQL + Auth + RLS — datos en la nube** |
 
 **Approval dates:**
 - Zustand: approved 2026-04-07
 - react-router-dom: approved 2026-04-07
+- @supabase/supabase-js: approved 2026-04-15 (Phase 3 migration)
+
+**Feature flag:** `USE_SUPABASE = Boolean(VITE_SUPABASE_URL && VITE_SUPABASE_ANON_KEY)`
+- `true`  → App usa Supabase (auth + DB). Requiere `.env.local` con credenciales.
+- `false` → App funciona con Zustand + localStorage (comportamiento original, retrocompatible).
 
 ---
 
@@ -87,15 +93,39 @@ KITCHENCAMP/
 │
 └── src/
     ├── main.jsx                      → React entry point (ErrorBoundary → App)
-    ├── App.jsx                       → Root: BrowserRouter + lazy routes + Sidebar
+    ├── App.jsx                       → Root: AuthProvider + AuthGate + BrowserRouter + routes
     ├── index.css                     → Global styles, animations, reusable CSS classes
     ├── App.css                       → App-level overrides (minimal)
     │
     ├── store/
-    │   └── useStore.js               → Zustand global store + localStorage persist
+    │   └── useStore.js               → Zustand store: optimistic updates + USE_SUPABASE flag
+    │                                    (persist solo cuando USE_SUPABASE=false)
+    │
+    ├── lib/
+    │   └── db/                       → Capa de datos. Las views NO importan de aquí directamente.
+    │       ├── client.js             → Supabase singleton + USE_SUPABASE flag
+    │       ├── index.js              → Re-exports públicos del módulo db/
+    │       ├── transform.js          → fetchAllUserData() + mappers DB↔Store (snake↔camel)
+    │       ├── suppliers.js          → CRUD: insertSupplier, updateSupplierInDb, deleteSupplierFromDb
+    │       ├── ingredients.js        → CRUD: insert/update/delete/updateStock
+    │       ├── recipes.js            → CRUD: insert/update/delete + recipe_ingredients (2 tablas)
+    │       ├── menus.js              → CRUD: insert/update/delete + menu_recipes (2 tablas)
+    │       ├── calendar.js           → CRUD: insert/setForDate/delete calendar_events
+    │       ├── migration.js          → migrateLocalDataToDb() + hasLocalData() + isUserDbEmpty()
+    │       └── transform.js          → DB→Store shape + Store→DB shape + groupBy util
+    │
+    ├── hooks/
+    │   ├── useAuth.js                → Hook de auth: session, signIn, signUp, signOut + hydrate store
+    │   ├── AuthContext.jsx           → Context provider — useAuth() se ejecuta UNA SOLA VEZ aquí
+    │   ├── useCrudState.js           → Generic local CRUD + optional localStorage
+    │   ├── useCartManager.js         → Cart logic (UNUSED — cart lives in Zustand now)
+    │   └── useDeleteConfirm.js       → Double-click delete with 3s timeout
     │
     ├── components/
-    │   ├── Sidebar.jsx               → Fixed left nav (80px), active route, cart badge
+    │   ├── AuthGate.jsx              → Gate de acceso: modal login/signup si no hay sesión
+    │   ├── MigrationBanner.jsx       → Banner: migrar datos de localStorage → Supabase
+    │   ├── Toast.jsx                 → Notificaciones de error/éxito (auto-dismiss 5s)
+    │   ├── Sidebar.jsx               → Fixed left nav (80px) + botón Sign Out (cuando USE_SUPABASE)
     │   ├── FormControls.jsx          → Label, TInput, SInput (reusable form atoms)
     │   ├── GroupInput.jsx            → Diner count input per group (A/B/C)
     │   ├── Toggle.jsx                → On/off switch component
@@ -107,11 +137,7 @@ KITCHENCAMP/
     │
     ├── data/
     │   └── mockData.js               → Seed data (ingredients/recipes/menus/suppliers) + calculation engine
-    │
-    ├── hooks/
-    │   ├── useCrudState.js           → Generic local CRUD + optional localStorage
-    │   ├── useCartManager.js         → Cart logic (UNUSED — cart lives in Zustand now)
-    │   └── useDeleteConfirm.js       → Double-click delete with 3s timeout
+    │                                    (seed solo se usa cuando USE_SUPABASE=false)
     │
     ├── utils/
     │   └── generatePurchaseOrderPDF.js → jsPDF engine: A4 PDF with logo, tables, subtotals
@@ -126,41 +152,64 @@ KITCHENCAMP/
         ├── InventoryView.jsx         → /inventory — Ingredient catalog CRUD
         ├── SuppliersView.jsx         → /suppliers — Supplier management CRUD
         └── CartView.jsx              → /cart — Shopping cart + PDF generation
+
+supabase/
+└── migrations/
+    └── 001_initial_schema.sql        → DDL completo: 7 tablas, RLS policies, triggers updated_at
 ```
 
 ### 4.2 Data Flow
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  useStore.js (Zustand)               │
-│                                                     │
-│  ingredients[] │ recipes[] │ menus[] │ suppliers[]  │
-│  calendarEvents{} │ cart[]                          │
-│                  ↓ persist middleware                │
-│             localStorage['kitchencalc-store']       │
-└───────────────────────┬─────────────────────────────┘
-                        │ (read via useStore hook)
-              ┌─────────▼─────────┐
-              │      App.jsx       │
-              │  BrowserRouter    │
-              │  React.lazy()     │
-              │  Sidebar (fixed)  │
-              └─────────┬─────────┘
-                        │ (URL routing → React Router)
-                        │
-          ┌─────────────┼────────────────┐
-          ▼             ▼                ▼
-    <DashboardView>  <RecipesView>   <CalendarView>  ...
-    (reads store)   (reads store)   (reads store)
-    (dispatches     (dispatches     (dispatches
-     actions)        actions)        actions)
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Supabase (Cloud)                                  │
+│  Auth (email+password) │ PostgreSQL (7 tablas) │ RLS por user_id         │
+└──────────────────────────────────┬──────────────────────────────────────┘
+                                   │ @supabase/supabase-js
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │     src/lib/db/              │
+                    │  transform.js → fetchAllUserData()  │
+                    │  suppliers.js │ ingredients.js      │
+                    │  recipes.js   │ menus.js            │
+                    │  calendar.js  │ migration.js        │
+                    └──────────────┬──────────────┘
+                                   │ hydrate(data) + optimistic updates
+┌──────────────────────────────────▼──────────────────────────────────────┐
+│                      useStore.js (Zustand)                               │
+│                                                                          │
+│  ingredients[] │ recipes[] │ menus[] │ suppliers[] │ calendarEvents{}    │
+│  cart[]  │  isHydrating  │  hydrationError  │  toasts[]                  │
+│                                                                          │
+│  Acciones ASYNC: optimistic update local → persist en DB → rollback si falla │
+│  Cart: siempre efímero (en memoria, sin DB)                              │
+│  USE_SUPABASE=false → persist middleware → localStorage (fallback)      │
+└─────────────────────────────────┬────────────────────────────────────────┘
+                                  │ (read via useStore hook)
+                    ┌─────────────▼──────────────┐
+                    │          App.jsx             │
+                    │  AuthProvider (una sola vez) │
+                    │  AuthGate (login modal)      │
+                    │  BrowserRouter + React.lazy()│
+                    │  Sidebar (fixed)             │
+                    └─────────────┬──────────────┘
+                                  │ (URL routing → React Router)
+                                  │
+          ┌───────────────────────┼────────────────────────┐
+          ▼                       ▼                        ▼
+    <DashboardView>         <RecipesView>           <CalendarView>  ...
+    (reads store)           (reads store)           (reads store)
+    (dispatches async       (dispatches async       (dispatches async
+     actions)                actions)                actions)
 ```
 
 **Key principles:**
-1. **useStore.js** is the single source of truth. All views read from it directly via the `useStore()` hook.
-2. **Views** manage local UI state only (search filters, form inputs, selected item, toggles).
-3. **mockData.js** provides seed data for first-run AND hosts the calculation engine functions.
-4. **Navigation** is URL-based (React Router v7). The Sidebar reflects the active route.
+1. **useStore.js** is the single source of truth. All views read from it via `useStore()` — sin conocer Supabase.
+2. **src/lib/db/** es el único lugar donde existe lógica de Supabase. Las views nunca importan de aquí.
+3. **useAuth.js** + **AuthContext.jsx** se ejecutan UNA SOLA VEZ (en `AuthProvider`) para evitar suscripciones duplicadas.
+4. **Optimistic updates:** la UI se actualiza inmediatamente, la DB persiste async, rollback automático si falla.
+5. **mockData.js** aloja el motor de cálculo (funciones puras) — nunca se usa como seed en modo Supabase.
+6. **Navigation** es URL-based (React Router v7). El Sidebar refleja la ruta activa.
 
 ### 4.3 Routing Table
 
@@ -407,28 +456,49 @@ Then for each consolidated ingredient:
 ## 7. Global Store Schema
 
 File: [src/store/useStore.js](src/store/useStore.js)
-Persistence key: `'kitchencalc-store'` (localStorage, version 1)
+
+Persistencia: **condicional por feature flag**
+- `USE_SUPABASE=true`  → sin `persist` middleware. Datos vienen de Supabase al login.
+- `USE_SUPABASE=false` → `persist` a `localStorage['kitchencalc-store']` (version 1).
 
 ```js
 {
-  // Collections
-  ingredients: Ingredient[],
-  recipes: Recipe[],
-  menus: Menu[],
-  suppliers: Supplier[],
-  cart: CartItem[],
+  // ── Colecciones (vacias al init cuando USE_SUPABASE=true; seed data cuando false) ──
+  ingredients:    Ingredient[],
+  recipes:        Recipe[],
+  menus:          Menu[],
+  suppliers:      Supplier[],
+  cart:           CartItem[],          // siempre efímero — nunca se persiste en DB
   calendarEvents: { [dateKey: string]: CalendarEvent[] },
 
-  // Actions
-  addIngredient(i), updateIngredient(i), deleteIngredient(id),
-  addRecipe(r), updateRecipe(r), deleteRecipe(id),
-  addMenu(m), updateMenu(m), deleteMenu(id),
-  addSupplier(s), updateSupplier(s), deleteSupplier(id),
-  addToCart(item), removeFromCart(id), clearCart(),
-  setCalendarEvents(events),
-  resetStore()
+  // ── Estado de hidratación ──
+  isHydrating:    boolean,             // true mientras se cargan datos de Supabase
+  hydrationError: string | null,       // mensaje de error si fetchAllUserData() falla
+
+  // ── Sistema de toasts ──
+  toasts:         Toast[],             // auto-dismiss a los 5s
+  addToast({ type: 'error'|'success'|'info', message }),
+  removeToast(id),
+
+  // ── Acciones CRUD (async con optimistic update cuando USE_SUPABASE=true) ──
+  // Patrón: update local inmediato → persist DB → rollback + toast si error
+  addIngredient(i),    updateIngredient(i),    deleteIngredient(id),
+  addRecipe(r),        updateRecipe(r),        deleteRecipe(id),
+  addMenu(m),          updateMenu(m),          deleteMenu(id),
+  addSupplier(s),      updateSupplier(s),      deleteSupplier(id),
+  addToCart(item),     removeFromCart(id),     clearCart(),
+  setCalendarEvents(events),   // async: sincroniza solo las fechas que cambiaron
+
+  // ── Hidratación y estado ──
+  hydrate(data),               // reemplaza todas las colecciones desde Supabase
+  setHydrating(bool),
+  setHydrationError(msg),
+  resetStore(),                // vacía el store (en la sesión) al hacer logout
 }
 ```
+
+**Función auxiliar exportada:** `setCurrentUserId(id)` — inyecta el `auth.uid()` actual
+para que las acciones del store puedan pasarlo a las funciones de DB.
 
 ---
 
@@ -511,10 +581,16 @@ Branch: `main` is production. Create feature branches only when instructed.
 - Per-recipe diner counts in menus
 - Calendar requisition summary (day/week view)
 
-### Phase 3 — Real Backend (PLANNED)
-- Replace localStorage with backend API (REST or Supabase)
-- User authentication
-- Multi-user / multi-kitchen support
+### Phase 3 — Real Backend (**COMPLETE** — 2026-04-15)
+- ✅ Supabase como backend: PostgreSQL + Auth + RLS (sin servidor propio)
+- ✅ Autenticación con email + password (modal en `AuthGate.jsx`)
+- ✅ 7 tablas con RLS por `user_id` y triggers `updated_at`
+- ✅ Hidratación del store al login vía `fetchAllUserData()`
+- ✅ Optimistic updates en todas las acciones CRUD del store
+- ✅ Sistema de toasts para errores de persistencia
+- ✅ Migración de datos localStorage → Supabase (`MigrationBanner.jsx`)
+- ✅ Feature flag `USE_SUPABASE` — retrocompatible sin credenciales
+- 🔲 Multi-kitchen (ver Fase 6 del plan de ejecución — diseño compatible ya preparado)
 
 ### Phase 4 — Expansion Modules (MOCKUP → REAL)
 - **Budget Module** — Cost tracking against purchase orders
@@ -546,5 +622,6 @@ npm run lint       # ESLint check
 
 ---
 
-*Last updated: 2026-04-14*
+*Last updated: 2026-04-15*
 *Maintainer: Kamilo G*
+*Phase 3 (Supabase backend) completada — ver `agent-sessions/2026-04-14_execution-plan-supabase-migration.md`*
