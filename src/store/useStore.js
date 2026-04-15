@@ -42,7 +42,7 @@ const storeCreator = (set, get) => ({
   calendarEvents: {},
 
   // ── Estado de hidratación ─────────────────────────────────────────────────
-  isHydrating:    USE_SUPABASE,  // true mientras esperamos datos de Supabase
+  isHydrating:    false,  // no bloquea la UI — datos se llenan en background
   hydrationError: null,
 
   // ── Toasts (notificaciones de error) ──────────────────────────────────────

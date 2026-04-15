@@ -40,12 +40,26 @@ function FallbackLoader() {
   );
 }
 
-function HydrationLoader() {
+// ── Barra de progreso de hidratación (no bloquea las rutas) ─────────────────
+function HydrationBar() {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 12, color: 'rgba(155,109,202,0.7)' }}>
-      <div style={{ width: 36, height: 36, border: '3px solid rgba(78,205,196,0.2)', borderTop: '3px solid #4ecdc4', borderRadius: '50%', animation: 'spin 0.9s linear infinite' }} />
-      <span style={{ fontSize: 13, fontWeight: 500 }}>Loading your data…</span>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, height: 3, zIndex: 9999,
+      background: 'rgba(78,205,196,0.15)',
+    }}>
+      <div style={{
+        height: '100%', width: '60%',
+        background: 'linear-gradient(90deg, #4ecdc4, #38b2ac, #4ecdc4)',
+        backgroundSize: '200% 100%',
+        animation: 'shimmer 1.4s ease-in-out infinite',
+        borderRadius: '0 2px 2px 0',
+      }} />
+      <style>{`
+        @keyframes shimmer {
+          0%   { background-position: 200% center; }
+          100% { background-position: -200% center; }
+        }
+      `}</style>
     </div>
   );
 }
@@ -58,6 +72,9 @@ function AppContent() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', width: '100%' }}>
+      {/* Barra de carga discreta — solo visible mientras se hidratan los datos */}
+      {isHydrating && USE_SUPABASE && <HydrationBar />}
+
       <Sidebar />
 
       <main style={{ marginLeft: 80, flex: 1, padding: '40px 48px', overflowY: 'auto' }}>
@@ -73,10 +90,6 @@ function AppContent() {
                 Retry
               </button>
             </div>
-
-          ) : isHydrating && USE_SUPABASE ? (
-            <HydrationLoader />
-
           ) : (
             <Suspense fallback={<FallbackLoader />}>
               <Routes>
