@@ -453,11 +453,12 @@ export default function CalendarView() {
     const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
 
     const addMeal = (dateKey, entry) => {
+        const dayEvents = meals[dateKey] ?? [];
         setMeals({
             ...meals,
             [dateKey]: [
-                ...(meals[dateKey] ?? []),
-                { id: `meal-${Date.now()}-${Math.random()}`, ...entry },
+                ...dayEvents,
+                { id: crypto.randomUUID(), ...entry },
             ],
         });
     };

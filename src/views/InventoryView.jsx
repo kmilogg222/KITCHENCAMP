@@ -84,7 +84,7 @@ function IngredientModal({ ingredient, supplierIds = [], onSave, onClose }) {
         if (!validate()) return;
         onSave({
             ...ingredient,
-            id: ingredient.id ?? `ing-${Date.now()}`,
+            id: ingredient.id ?? crypto.randomUUID(),
             name: form.name.trim(),
             unit: form.unit,
             packSize: Number(form.packSize),
@@ -218,7 +218,7 @@ export default function InventoryView() {
     const onAddIngredient = useStore(state => state.addIngredient);
     const onDeleteIngredient = useStore(state => state.deleteIngredient);
 
-    const SUPPLIER_IDS = useMemo(() => suppliers.map(s => s.id), [suppliers]);
+    const SUPPLIER_NAMES = useMemo(() => suppliers.map(s => s.name), [suppliers]);
     const [search, setSearch] = useState('');
     const [filterSupplier, setFilterSupplier] = useState('all');
     const [filterStatus, setFilterStatus] = useState('all');
@@ -244,7 +244,7 @@ export default function InventoryView() {
         confirmDelete(ing.id, onDeleteIngredient);
     };
 
-    const supColor = (supId) => suppliers.find(s => s.id === supId)?.color ?? '#6b3fa0';
+    const supColor = (supName) => suppliers.find(s => s.name === supName)?.color ?? '#6b3fa0';
 
     return (
         <div className="fade-in-up">
@@ -292,7 +292,7 @@ export default function InventoryView() {
                     {/* Supplier filter */}
                     <select value={filterSupplier} onChange={e => setFilterSupplier(e.target.value)} style={{ ...inputSx, width: 'auto' }}>
                         <option value="all">All Suppliers</option>
-                        {SUPPLIER_IDS.map(s => <option key={s}>{s}</option>)}
+                        {SUPPLIER_NAMES.map(s => <option key={s}>{s}</option>)}
                     </select>
                     {/* Status filter */}
                     <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...inputSx, width: 'auto' }}>
@@ -429,12 +429,14 @@ export default function InventoryView() {
             {modal !== null && (
                 <IngredientModal
                     ingredient={modal}
-                    supplierIds={SUPPLIER_IDS}
+                    supplierIds={SUPPLIER_NAMES}
                     onSave={(ing) => {
+                        // supplierId: null fuerza re-resolución por nombre en storeIngredientToDb
+                        const payload = { ...ing, supplierId: null };
                         if (!ing.id || modal.id === undefined) {
-                            onAddIngredient(ing);
+                            onAddIngredient(payload);
                         } else {
-                            onUpdateIngredient(ing);
+                            onUpdateIngredient(payload);
                         }
                         setModal(null);
                     }}

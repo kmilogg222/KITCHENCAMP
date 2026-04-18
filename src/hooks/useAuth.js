@@ -113,8 +113,12 @@ export function useAuth() {
 
   const signOut = async () => {
     if (!USE_SUPABASE) return { error: null };
-    const { error } = await supabase.auth.signOut();
-    return { error };
+    try {
+      const { error } = await supabase.auth.signOut();
+      return { error };
+    } catch (e) {
+      return { error: e };
+    }
   };
 
   const dismissMigration = () => setNeedsMigration(false);

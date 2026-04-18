@@ -199,6 +199,16 @@
 |---|-------------|------|----------|
 | — | No known bugs at this time | — | — |
 
+---
+
+## 🔧 Bug Fixes (2026-04-18)
+
+> Correcciones post-Fase 3 (Supabase integration bugs).
+
+- [x] **FIX — `SUPPLIER_IDS` mapeaba UUIDs en vez de nombres** — `InventoryView.jsx` y `CreateRecipeView.jsx` usaban `suppliers.map(s => s.id)` para los dropdowns de proveedor. Como `ing.supplier` en el store es el nombre (no el UUID), el filtro nunca funcionaba, el modal mostraba UUIDs como opciones y el color del badge siempre era el default. Fix: cambiar a `suppliers.map(s => s.name)`. También se fuerza `supplierId: null` al guardar para que `storeIngredientToDb` resuelva el UUID desde el nombre seleccionado.
+
+- [x] **FIX — Calendar crash y eventos invisibles tras hydration desde DB** — `dbCalendarToStore` en `transform.js` producía `slot` (en vez de `slotKey`) y solo guardaba `itemId` sin reconstruir los objetos `recipe`/`menu`/`menuRecipes`. Resultado: DayPanel lanzaba `TypeError: Cannot read properties of undefined (reading 'image')` y ningún meal aparecía en los slots. Fix: renombrar `slot` → `slotKey`, extender la firma con `storeRecipes`/`storeMenus` y reconstruir los objetos completos al hidratar.
+
 ## 📐 Data Model — Ingredient Ref (Recipe)
 
 The `ingredients[]` array inside a recipe stores refs, not full catalog objects. Current shape:
@@ -270,6 +280,7 @@ The `ingredients[]` array inside a recipe stores refs, not full catalog objects.
 
 ---
 
-*Last updated: 2026-04-15*
+*Last updated: 2026-04-18*
 *Maintainer: Kamilo G*
 *Fase 3 completada — ver `agent-sessions/2026-04-14_execution-plan-supabase-migration.md`*
+*Bug fixes post-Fase 3 — ver `agent-sessions/2026-04-18_supabase-bug-fixes.md`*

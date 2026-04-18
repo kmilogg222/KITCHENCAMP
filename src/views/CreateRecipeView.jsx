@@ -377,7 +377,7 @@ export default function CreateRecipeView() {
 
     const editingRecipe = location.state?.recipe;
     const isEditing = !!editingRecipe;
-    const SUPPLIER_IDS = suppliers.map(s => s.id);
+    const SUPPLIER_IDS = suppliers.map(s => s.name);
 
     const [form, setForm] = useState(() => ({
         name: editingRecipe?.name ?? '',
@@ -398,6 +398,7 @@ export default function CreateRecipeView() {
     const [showEmoji, setShowEmoji] = useState(false);
     const [errors, setErrors] = useState({});
     const [saved, setSaved] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
 
     const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -446,81 +447,94 @@ export default function CreateRecipeView() {
     };
 
     // ── Save ────────────────────────────────────────────────────────────────────
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!validate()) return;
+        setSubmitting(true);
 
-        // Separate new ingredients (to be added to catalog)
-        const newIngredients = [];
-        const recipeIngredients = slots.map((s, i) => {
-            // Resolve ingredientId (existing or freshly created)
-            let ingredientId;
-            if (s.mode === 'existing') {
-                ingredientId = s.ingredientId;
-            } else {
-                // Create new catalog entry
-                const newId = `ing-custom-${Date.now()}-${i}`;
-                newIngredients.push({
-                    id: newId,
-                    name: s.name.trim(),
-                    unit: s.unit,
-                    packSize: Number(s.packSize),
-                    currentStock: Number(s.currentStock) || 0,
-                    minOrder: Number(s.minOrder) || 1,
-                    supplier: s.supplier,
-                    pricePerPack: Number(s.pricePerPack) || 0,
-                    substitutable: s.substitutable,
-                    substitute: s.substitutable ? s.substitute : null,
-                });
-                ingredientId = newId;
+        try {
+            // Separate new ingredients (to be added to catalog)
+            const newIngredients = [];
+            const recipeIngredients = slots.map((s, i) => {
+                // Resolve ingredientId (existing or freshly created)
+                let ingredientId;
+                if (s.mode === 'existing') {
+                    ingredientId = s.ingredientId;
+                } else {
+                    // Create new catalog entry
+                    const newId = crypto.randomUUID();
+                    newIngredients.push({
+                        id: newId,
+                        name: s.name.trim(),
+                        unit: s.unit,
+                        packSize: Number(s.packSize),
+                        currentStock: Number(s.currentStock) || 0,
+                        minOrder: Number(s.minOrder) || 1,
+                        supplier: s.supplier,
+                        pricePerPack: Number(s.pricePerPack) || 0,
+                        substitutable: s.substitutable,
+                        substitute: s.substitutable ? s.substitute : null,
+                    });
+                    ingredientId = newId;
+                }
+
+                // Build ingredient ref based on inputMode
+                const wasteField = s.wastePct !== '' && Number(s.wastePct) > 0
+                    ? { wastePct: Number(s.wastePct) }
+                    : {};
+                if (s.inputMode === 'yield') {
+                    return { ingredientId, inputMode: 'yield', quantityForBase: Number(String(s.quantityForBase).trim()), ...wasteField };
+                } else {
+                    return {
+                        ingredientId,
+                        inputMode: 'per-person',
+                        portionByGroup: {
+                            A: Number(s.portionByGroup.A) || 0,
+                            B: Number(s.portionByGroup.B) || 0,
+                            C: Number(s.portionByGroup.C) || 0,
+                        },
+                        ...wasteField,
+                    };
+                }
+            });
+
+            const hasYieldIngredients = slots.some(s => s.inputMode === 'yield');
+
+            const recipe = {
+                id: editingRecipe?.id ?? crypto.randomUUID(),
+                name: form.name.trim(),
+                category: form.category,
+                description: form.description.trim(),
+                image: form.image,
+                rating: form.rating,
+                isNew: !isEditing,
+                isCustom: true,
+                ...(hasYieldIngredients && {
+                    baseServings: form.baseServings,
+                    portionFactors: form.portionFactors,
+                }),
+                ingredients: recipeIngredients,
+            };
+
+            for (const ing of newIngredients) {
+                await addIngredient(ing);
             }
 
-            // Build ingredient ref based on inputMode
-            const wasteField = s.wastePct !== '' && Number(s.wastePct) > 0
-                ? { wastePct: Number(s.wastePct) }
-                : {};
-            if (s.inputMode === 'yield') {
-                return { ingredientId, inputMode: 'yield', quantityForBase: Number(String(s.quantityForBase).trim()), ...wasteField };
+            // Es importante hacer await de addRecipe o updateRecipe para capturar fallos 
+            if (isEditing) {
+                await updateRecipe(recipe);
             } else {
-                return {
-                    ingredientId,
-                    inputMode: 'per-person',
-                    portionByGroup: {
-                        A: Number(s.portionByGroup.A) || 0,
-                        B: Number(s.portionByGroup.B) || 0,
-                        C: Number(s.portionByGroup.C) || 0,
-                    },
-                    ...wasteField,
-                };
+                await addRecipe(recipe);
             }
-        });
 
-        const hasYieldIngredients = slots.some(s => s.inputMode === 'yield');
+            setSaved(true);
+            setTimeout(() => navigate('/recipes'), 400);
 
-        const recipe = {
-            id: editingRecipe?.id ?? `custom-${Date.now()}`,
-            name: form.name.trim(),
-            category: form.category,
-            description: form.description.trim(),
-            image: form.image,
-            rating: form.rating,
-            isNew: !isEditing,
-            isCustom: true,
-            ...(hasYieldIngredients && {
-                baseServings: form.baseServings,
-                portionFactors: form.portionFactors,
-            }),
-            ingredients: recipeIngredients,
-        };
-
-        newIngredients.forEach(ing => addIngredient(ing));
-        if (isEditing) {
-            updateRecipe(recipe);
-        } else {
-            addRecipe(recipe);
+        } catch (err) {
+            console.error("Save error:", err);
+            alert(`Error saving recipe: ${err.message}`);
+        } finally {
+            setSubmitting(false);
         }
-
-        setSaved(true);
-        setTimeout(() => navigate('/recipes'), 400);
     };
 
     const onCancel = () => navigate('/recipes');

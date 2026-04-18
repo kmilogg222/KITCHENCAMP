@@ -89,7 +89,7 @@ export default function CreateMenuView() {
         if (!validate()) return;
 
         const menu = {
-            id: editingMenu?.id ?? `menu-${Date.now()}`,
+            id: editingMenu?.id ?? crypto.randomUUID(),
             name: form.name.trim(),
             description: form.description.trim(),
             image: form.image,

@@ -85,7 +85,8 @@ export function transformDbToStoreShape({ suppliers, ingredients, recipeIngredie
   const storeMenus = menus.map(m => dbMenuToStore(m, mrByMenu[m.id] || [], recipeIdMap));
 
   // 5. CalendarEvents: reconstruir { "YYYY-MM-DD": events[] } desde filas planas
-  const storeCalendarEvents = dbCalendarToStore(calendarEvents);
+  // Pasamos storeRecipes y storeMenus para reconstruir los objetos completos que CalendarView espera
+  const storeCalendarEvents = dbCalendarToStore(calendarEvents, storeRecipes, storeMenus);
 
   return {
     suppliers:      storeSuppliers,
@@ -175,19 +176,36 @@ export function dbMenuToStore(menu, menuRecipeRows, _recipeIdMap) {
   };
 }
 
-export function dbCalendarToStore(calendarRows) {
+export function dbCalendarToStore(calendarRows, storeRecipes = [], storeMenus = []) {
   // Reconstruir { "YYYY-MM-DD": CalendarEvent[] }
+  // storeRecipes / storeMenus se usan para reconstruir los objetos completos
+  // que CalendarView espera (igual que en actualizaciones optimistas).
+  const recipeMap = new Map(storeRecipes.map(r => [r.id, r]));
+  const menuMap   = new Map(storeMenus.map(m => [m.id, m]));
+
   const result = {};
   for (const row of calendarRows) {
     const dateKey = row.event_date; // ya viene como "YYYY-MM-DD"
     if (!result[dateKey]) result[dateKey] = [];
-    result[dateKey].push({
-      id:     row.id,
-      type:   row.type,
-      itemId: row.type === 'recipe' ? row.recipe_id : row.menu_id,
-      slot:   row.slot,
-      note:   row.note ?? '',
-    });
+
+    const entry = {
+      id:      row.id,
+      type:    row.type,
+      slotKey: row.slot, // CalendarView usa slotKey, no slot
+      note:    row.note ?? '',
+    };
+
+    if (row.type === 'recipe') {
+      entry.recipe = recipeMap.get(row.recipe_id);
+    } else {
+      const menu = menuMap.get(row.menu_id);
+      entry.menu = menu;
+      entry.menuRecipes = (menu?.recipeIds ?? [])
+        .map(rid => recipeMap.get(rid))
+        .filter(Boolean);
+    }
+
+    result[dateKey].push(entry);
   }
   return result;
 }
