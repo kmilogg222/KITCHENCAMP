@@ -131,6 +131,15 @@
 
 ### P1 — High Priority
 
+- [ ] **Sistema de Import / Export de datos**
+  - Plan completo diseñado: ver `agent-sessions/2026-04-18_import-export-system-plan.md`
+  - Módulo `src/lib/io/`: Entity Registry, Format Registry, validación, idRemap, conflict resolution
+  - Formatos: JSON (backup completo, todas las entidades) + CSV (suppliers e ingredients)
+  - UI: `DataPortalView.jsx` en `/data` + `ImportPreviewModal.jsx`
+  - Fases: A (core lib) → B (export) → C (CSV) → D (import con preview)
+  - Única nueva dep opcional: `papaparse` (solo Fase C)
+  - Files: `src/lib/io/`, `src/views/DataPortalView.jsx`, `src/components/ImportPreviewModal.jsx`, mods en `App.jsx` y `Sidebar.jsx`
+
 - [ ] **Code splitting audit**
   - Current bundle: ~725 kB (too large for fast load)
   - `React.lazy()` is configured in `App.jsx` but verify all views are properly split
