@@ -46,6 +46,19 @@
 - [x] **`src/lib/db/migration.js`** — `migrateLocalDataToDb()`: migra datos de localStorage → Supabase respetando el orden de FKs, resolviendo IDs legacy (strings/enteros) a UUIDs. `hasLocalData()` + `isUserDbEmpty(userId)`.
 - [x] **`src/lib/db/index.js`** — re-exports públicos del módulo `db/`.
 
+### Import / Export System (2026-04-20)
+
+- [x] **`src/lib/io/registry.js`** — Entity Registry (5 entidades) + Format Registry (JSON). Diseño extensible: agregar entidad = 1 objeto nuevo.
+- [x] **`src/lib/io/validate.js`** — Validación de esquema por entidad antes de importar. Verifica campos requeridos + validaciones específicas (units, packSize, arrays anidados).
+- [x] **`src/lib/io/idRemap.js`** — Reasignación de UUIDs al importar. Usa `crypto.randomUUID()`. Mapas de traducción oldId→newId para resolver FKs cruzadas (recipe→ingredient, menu→recipe, calendar→recipe/menu).
+- [x] **`src/lib/io/conflicts.js`** — Resolución de duplicados: skip (default), overwrite, rename.
+- [x] **`src/lib/io/formats/json.js`** — Serialize/deserialize JSON con metadata (`_meta.app`, `_meta.version`, `_meta.exportedAt`).
+- [x] **`src/lib/io/index.js`** — Public API: `exportData()`, `previewImport()`, `commitImport()`. Tratamiento especial para calendar (Object merge) e ingredients (limpiar supplierId).
+- [x] **`src/lib/db/bulk.js`** — Funciones de batch insert para Supabase (reservado para future CSV optimization).
+- [x] **`src/views/DataPortalView.jsx`** — Vista con secciones Export (entity selector grid, format info, download) + Import (drag & drop zone, file reader, error display).
+- [x] **`src/components/ImportPreviewModal.jsx`** — Modal glassmorphism con preview por entidad (valid/invalid counts), conflict strategy selector, progress indicator, result summary.
+- [x] **Integración** — Ruta `/data` lazy-loaded en App.jsx. Nav item "Data" con icono `ArrowUpDown` en Sidebar.jsx.
+
 ### Auth UI (2026-04-15)
 
 - [x] **`src/hooks/useAuth.js`** — sesión, `signIn`, `signUp`, `signOut`. Hidrata el store en `SIGNED_IN` via `useStore.getState()` (imperativo, evita dependencias circulares). Ref guard contra doble-hidratación en StrictMode. Detecta si hay datos locales para migrar.
@@ -104,7 +117,7 @@
 
 | Task | Description | Status |
 |------|-------------|--------|
-| — | No active development tasks | Idle |
+| Sistema Import/Export | Implementación completa: módulo IO, DataPortalView, ImportPreviewModal | ✅ Done |
 
 ---
 
@@ -131,14 +144,13 @@
 
 ### P1 — High Priority
 
-- [ ] **Sistema de Import / Export de datos**
-  - Plan completo diseñado: ver `agent-sessions/2026-04-18_import-export-system-plan.md`
+- [x] **Sistema de Import / Export de datos** — Implementado 2026-04-20
+  - Plan + implementación: ver `agent-sessions/2026-04-20_import-export-implementation.md`
   - Módulo `src/lib/io/`: Entity Registry, Format Registry, validación, idRemap, conflict resolution
-  - Formatos: JSON (backup completo, todas las entidades) + CSV (suppliers e ingredients)
+  - Formato: JSON (backup completo, todas las entidades). CSV pospuesto a PR futura.
   - UI: `DataPortalView.jsx` en `/data` + `ImportPreviewModal.jsx`
-  - Fases: A (core lib) → B (export) → C (CSV) → D (import con preview)
-  - Única nueva dep opcional: `papaparse` (solo Fase C)
-  - Files: `src/lib/io/`, `src/views/DataPortalView.jsx`, `src/components/ImportPreviewModal.jsx`, mods en `App.jsx` y `Sidebar.jsx`
+  - Archivos creados: 7 en `src/lib/io/`, 1 en `src/lib/db/`, 2 en views/components
+  - Archivos modificados: `App.jsx`, `Sidebar.jsx`, `src/lib/db/index.js`
 
 - [ ] **Code splitting audit**
   - Current bundle: ~725 kB (too large for fast load)

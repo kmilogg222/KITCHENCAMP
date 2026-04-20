@@ -44,3 +44,10 @@ export {
 
 // ── Migración ─────────────────────────────────────────────────────────────────
 export { migrateLocalDataToDb, isUserDbEmpty, hasLocalData } from './migration';
+
+// ── Bulk Operations (para Import) ─────────────────────────────────────────────
+export {
+  bulkInsertSuppliers,
+  bulkInsertIngredients,
+  bulkInsertRecipes,
+} from './bulk';

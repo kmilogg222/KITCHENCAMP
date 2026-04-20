@@ -11,7 +11,7 @@
  *  - cartCount  {number}   - Número de ítems en el carrito (para el badge).
  */
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChefHat, Calendar, Package, Truck, ShoppingCart, ClipboardList, Calculator, Activity, Users, LogOut } from 'lucide-react';
+import { ChefHat, Calendar, Package, Truck, ShoppingCart, ClipboardList, Calculator, Activity, Users, LogOut, ArrowUpDown } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useAuthContext } from '../hooks/AuthContext';
 import { USE_SUPABASE } from '../lib/db/client';
@@ -37,6 +37,7 @@ export default function Sidebar() {
         { id: 'inventory', icon: Package, label: 'Inventory' },
         { id: 'suppliers', icon: Truck, label: 'Suppliers' },
         { id: 'cart', icon: ShoppingCart, label: 'Cart', badge: cartCount },
+        { id: 'data', icon: ArrowUpDown, label: 'Data' },
         // --- Mockups ---
         { id: 'budget', icon: Calculator, label: 'Budget', isMockup: true },
         { id: 'activity', icon: Activity, label: 'Activity', isMockup: true },
