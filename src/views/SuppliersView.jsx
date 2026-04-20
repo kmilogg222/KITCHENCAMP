@@ -24,6 +24,7 @@ import { useState, useMemo } from 'react';
 import { ExternalLink, Mail, Plus, Pencil, Trash2, Save, X, Search, Phone, Building2 } from 'lucide-react';
 import { INPUT_STYLE, SUPPLIER_COLOR_PALETTE } from '../constants/theme';
 import { useStore } from '../store/useStore';
+import SkeletonList from '../components/SkeletonList';
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 const inputSx = INPUT_STYLE;
@@ -275,6 +276,9 @@ export default function SuppliersView() {
         onDeleteSupplier(deleteTarget.id);
         setDeleteTarget(null);
     };
+
+    const isHydrating = useStore(s => s.isHydrating);
+    if (isHydrating) return <SkeletonList rows={4} />;
 
     return (
         <div className="fade-in-up">

@@ -60,6 +60,7 @@ function IngredientRow({ ingredient, groups, useSubstitutions, onAddToCart, alre
 
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../store/useStore';
+import SkeletonList from '../components/SkeletonList';
 
 export default function RecipesView() {
     const navigate = useNavigate();
@@ -107,6 +108,8 @@ export default function RecipesView() {
         : [], [selectedRecipe, ingredientsCatalog]);
 
     const firstIng = resolvedIngredients[0];
+    const isHydrating = useStore(s => s.isHydrating);
+    if (isHydrating) return <SkeletonList rows={5} />;
 
     return (
         <div className="fade-in-up">

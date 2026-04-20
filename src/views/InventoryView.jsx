@@ -27,6 +27,7 @@ import {
 import { INPUT_STYLE, INGREDIENT_UNITS } from '../constants/theme';
 import useDeleteConfirm from '../hooks/useDeleteConfirm';
 import { useStore } from '../store/useStore';
+import SkeletonList from '../components/SkeletonList';
 
 const inputSx = INPUT_STYLE;
 
@@ -243,6 +244,9 @@ export default function InventoryView() {
     const handleDelete = (ing) => {
         confirmDelete(ing.id, onDeleteIngredient);
     };
+
+    const isHydrating = useStore(s => s.isHydrating);
+    if (isHydrating) return <SkeletonList rows={6} />;
 
     const supColor = (supName) => suppliers.find(s => s.name === supName)?.color ?? '#6b3fa0';
 

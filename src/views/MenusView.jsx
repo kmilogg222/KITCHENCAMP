@@ -82,6 +82,7 @@ function ConsolidatedIngredientRow({ item, onAddToCart, alreadyInCart }) {
 // ── MAIN COMPONENT ───────────────────────────────────────────────────────────
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../store/useStore';
+import SkeletonList from '../components/SkeletonList';
 
 export default function MenusView() {
     const navigate = useNavigate();
@@ -134,6 +135,9 @@ export default function MenusView() {
     const requisitionData = useMemo(() => (generated && selectedMenu && totalPeople > 0)
         ? calcMenuRequisition(selectedMenu, recipes, ingredientsCatalog, groups)
         : null, [generated, selectedMenu, totalPeople, recipes, ingredientsCatalog, groups]);
+
+    const isHydrating = useStore(s => s.isHydrating);
+    if (isHydrating) return <SkeletonList rows={4} />;
 
     return (
         <div className="fade-in-up">

@@ -45,6 +45,9 @@ export {
 // ── Migración ─────────────────────────────────────────────────────────────────
 export { migrateLocalDataToDb, isUserDbEmpty, hasLocalData } from './migration';
 
+// ── Utilidades de error ───────────────────────────────────────────────────────
+export { mapSupabaseError } from './errors';
+
 // ── Bulk Operations (para Import) ─────────────────────────────────────────────
 export {
   bulkInsertSuppliers,

@@ -16,10 +16,11 @@ import { USE_SUPABASE } from '../lib/db/client';
 // ── Importaciones de DB (solo se usan cuando USE_SUPABASE = true) ─────────────
 import {
   insertSupplier, updateSupplierInDb, deleteSupplierFromDb,
-  insertIngredient, updateIngredientInDb, deleteIngredientFromDb,
+  insertIngredient, updateIngredientInDb, deleteIngredientFromDb, updateStockInDb,
   insertRecipeWithIngredients, updateRecipeWithIngredients, deleteRecipeFromDb,
   insertMenuWithRecipes, updateMenuWithRecipes, deleteMenuFromDb,
   setCalendarEventsForDate,
+  mapSupabaseError,
 } from '../lib/db';
 
 // ── Helper: obtener userId del contexto (se inyecta en hydrate) ───────────────
@@ -30,6 +31,9 @@ export function setCurrentUserId(id) { _currentUserId = id; }
 function getSupplierNameToIdMap(suppliers) {
   return new Map(suppliers.map(s => [s.name, s.id]));
 }
+
+// ── Debounce map para actualizaciones de stock (ingredientId → timer handle) ──
+const _stockDebounceTimers = new Map();
 
 // ── Creador del store ─────────────────────────────────────────────────────────
 const storeCreator = (set, get) => ({
@@ -45,11 +49,18 @@ const storeCreator = (set, get) => ({
   isHydrating:    false,  // no bloquea la UI — datos se llenan en background
   hydrationError: null,
 
-  // ── Toasts (notificaciones de error) ──────────────────────────────────────
+  // ── Toasts (notificaciones) ───────────────────────────────────────────────
   toasts: [],
   addToast: (toast) => {
+    const MAX_TOASTS = 5;
     const id = `toast-${Date.now()}`;
-    set(state => ({ toasts: [...state.toasts, { ...toast, id }] }));
+    set(state => {
+      // Deduplicar: ignorar si el último toast tiene el mismo mensaje y tipo
+      const last = state.toasts[state.toasts.length - 1];
+      if (last?.message === toast.message && last?.type === toast.type) return {};
+      const updated = [...state.toasts, { ...toast, id }];
+      return { toasts: updated.slice(-MAX_TOASTS) };
+    });
     setTimeout(() => {
       set(state => ({ toasts: state.toasts.filter(t => t.id !== id) }));
     }, 5000);
@@ -79,7 +90,7 @@ const storeCreator = (set, get) => ({
     const { data, error } = await insertSupplier(supplier, _currentUserId);
     if (error) {
       set(state => ({ suppliers: state.suppliers.filter(s => s.id !== supplier.id) }));
-      get().addToast({ type: 'error', message: `Failed to save supplier: ${error.message}` });
+      get().addToast({ type: 'error', message: `No se pudo guardar el proveedor: ${mapSupabaseError(error)}` });
     } else if (data && data.id !== supplier.id) {
       set(state => ({ suppliers: state.suppliers.map(s => s.id === supplier.id ? { ...s, id: data.id } : s) }));
     }
@@ -95,7 +106,7 @@ const storeCreator = (set, get) => ({
     const { error } = await updateSupplierInDb(updatedSupplier, _currentUserId);
     if (error) {
       set(state => ({ suppliers: state.suppliers.map(s => s.id === updatedSupplier.id ? prev : s) }));
-      get().addToast({ type: 'error', message: `Failed to update supplier: ${error.message}` });
+      get().addToast({ type: 'error', message: `No se pudo actualizar el proveedor: ${mapSupabaseError(error)}` });
     }
   },
 
@@ -109,7 +120,7 @@ const storeCreator = (set, get) => ({
     const { error } = await deleteSupplierFromDb(id);
     if (error) {
       set({ suppliers: prev });
-      get().addToast({ type: 'error', message: `Failed to delete supplier: ${error.message}` });
+      get().addToast({ type: 'error', message: `No se pudo eliminar el proveedor: ${mapSupabaseError(error)}` });
     }
   },
 
@@ -124,7 +135,7 @@ const storeCreator = (set, get) => ({
     const { data, error } = await insertIngredient(ing, _currentUserId, supplierMap);
     if (error) {
       set(state => ({ ingredients: state.ingredients.filter(i => i.id !== ing.id) }));
-      get().addToast({ type: 'error', message: `Failed to save ingredient: ${error.message}` });
+      get().addToast({ type: 'error', message: `No se pudo guardar el ingrediente: ${mapSupabaseError(error)}` });
     } else if (data && data.id !== ing.id) {
       set(state => ({ ingredients: state.ingredients.map(i => i.id === ing.id ? { ...i, id: data.id } : i) }));
     }
@@ -136,12 +147,37 @@ const storeCreator = (set, get) => ({
       return;
     }
     const prev = get().ingredients.find(i => i.id === updatedIng.id);
+    // Actualización optimista siempre inmediata
     set(state => ({ ingredients: state.ingredients.map(i => i.id === updatedIng.id ? updatedIng : i) }));
+
+    // Detectar si solo cambió currentStock (debounce de 600ms)
+    const stockOnly = prev &&
+      prev.currentStock !== updatedIng.currentStock &&
+      prev.name     === updatedIng.name &&
+      prev.unit     === updatedIng.unit &&
+      prev.cost     === updatedIng.cost &&
+      prev.supplier === updatedIng.supplier;
+
+    if (stockOnly) {
+      clearTimeout(_stockDebounceTimers.get(updatedIng.id));
+      const timer = setTimeout(async () => {
+        _stockDebounceTimers.delete(updatedIng.id);
+        const { error } = await updateStockInDb(updatedIng.id, updatedIng.currentStock);
+        if (error) {
+          set(state => ({ ingredients: state.ingredients.map(i => i.id === updatedIng.id ? prev : i) }));
+          get().addToast({ type: 'error', message: `No se pudo actualizar el stock: ${mapSupabaseError(error)}` });
+        }
+      }, 600);
+      _stockDebounceTimers.set(updatedIng.id, timer);
+      return;
+    }
+
+    // Cambio completo (nombre, precio, proveedor, etc.) → inmediato
     const supplierMap = getSupplierNameToIdMap(get().suppliers);
     const { error } = await updateIngredientInDb(updatedIng, _currentUserId, supplierMap);
     if (error) {
       set(state => ({ ingredients: state.ingredients.map(i => i.id === updatedIng.id ? prev : i) }));
-      get().addToast({ type: 'error', message: `Failed to update ingredient: ${error.message}` });
+      get().addToast({ type: 'error', message: `No se pudo actualizar el ingrediente: ${mapSupabaseError(error)}` });
     }
   },
 
@@ -155,7 +191,7 @@ const storeCreator = (set, get) => ({
     const { error } = await deleteIngredientFromDb(id);
     if (error) {
       set({ ingredients: prev });
-      get().addToast({ type: 'error', message: `Failed to delete ingredient: ${error.message}` });
+      get().addToast({ type: 'error', message: `No se pudo eliminar el ingrediente: ${mapSupabaseError(error)}` });
     }
   },
 
@@ -169,7 +205,7 @@ const storeCreator = (set, get) => ({
     const { data, error } = await insertRecipeWithIngredients(recipe, _currentUserId);
     if (error) {
       set(state => ({ recipes: state.recipes.filter(r => r.id !== recipe.id) }));
-      get().addToast({ type: 'error', message: `Failed to save recipe: ${error.message}` });
+      get().addToast({ type: 'error', message: `No se pudo guardar la receta: ${mapSupabaseError(error)}` });
     } else if (data && data.id !== recipe.id) {
       set(state => ({ recipes: state.recipes.map(r => r.id === recipe.id ? { ...recipe, id: data.id } : r) }));
     }
@@ -185,7 +221,7 @@ const storeCreator = (set, get) => ({
     const { error } = await updateRecipeWithIngredients(updatedRecipe, _currentUserId);
     if (error) {
       set(state => ({ recipes: state.recipes.map(r => r.id === updatedRecipe.id ? prev : r) }));
-      get().addToast({ type: 'error', message: `Failed to update recipe: ${error.message}` });
+      get().addToast({ type: 'error', message: `No se pudo actualizar la receta: ${mapSupabaseError(error)}` });
     }
   },
 
@@ -199,7 +235,7 @@ const storeCreator = (set, get) => ({
     const { error } = await deleteRecipeFromDb(id);
     if (error) {
       set({ recipes: prev });
-      get().addToast({ type: 'error', message: `Failed to delete recipe: ${error.message}` });
+      get().addToast({ type: 'error', message: `No se pudo eliminar la receta: ${mapSupabaseError(error)}` });
     }
   },
 
@@ -213,7 +249,7 @@ const storeCreator = (set, get) => ({
     const { data, error } = await insertMenuWithRecipes(menu, _currentUserId);
     if (error) {
       set(state => ({ menus: state.menus.filter(m => m.id !== menu.id) }));
-      get().addToast({ type: 'error', message: `Failed to save menu: ${error.message}` });
+      get().addToast({ type: 'error', message: `No se pudo guardar el menú: ${mapSupabaseError(error)}` });
     } else if (data && data.id !== menu.id) {
       set(state => ({ menus: state.menus.map(m => m.id === menu.id ? { ...menu, id: data.id } : m) }));
     }
@@ -229,7 +265,7 @@ const storeCreator = (set, get) => ({
     const { error } = await updateMenuWithRecipes(updatedMenu, _currentUserId);
     if (error) {
       set(state => ({ menus: state.menus.map(m => m.id === updatedMenu.id ? prev : m) }));
-      get().addToast({ type: 'error', message: `Failed to update menu: ${error.message}` });
+      get().addToast({ type: 'error', message: `No se pudo actualizar el menú: ${mapSupabaseError(error)}` });
     }
   },
 
@@ -243,7 +279,7 @@ const storeCreator = (set, get) => ({
     const { error } = await deleteMenuFromDb(id);
     if (error) {
       set({ menus: prev });
-      get().addToast({ type: 'error', message: `Failed to delete menu: ${error.message}` });
+      get().addToast({ type: 'error', message: `No se pudo eliminar el menú: ${mapSupabaseError(error)}` });
     }
   },
 
@@ -281,7 +317,7 @@ const storeCreator = (set, get) => ({
       if (error) {
         console.error(`[setCalendarEvents] Error syncing ${dateKey}:`, error.message);
         set({ calendarEvents: prev });
-        get().addToast({ type: 'error', message: `Failed to save calendar: ${error.message}` });
+        get().addToast({ type: 'error', message: `No se pudo guardar el calendario: ${mapSupabaseError(error)}` });
         return;
       }
     }

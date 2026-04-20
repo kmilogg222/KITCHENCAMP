@@ -16,6 +16,7 @@
  */
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
+import SkeletonList from '../components/SkeletonList';
 import { Sparkles, Clock, ChefHat, Plus, ClipboardList, AlertTriangle, Users, Truck, ArrowRight, Calendar as CalendarIcon, PackageOpen } from 'lucide-react';
 
 export default function DashboardView() {
@@ -46,6 +47,9 @@ export default function DashboardView() {
         if (status === 'busy') return '#f59e0b'; // Amber
         return '#9ca3af'; // Gray
     };
+
+    const isHydrating = useStore(s => s.isHydrating);
+    if (isHydrating) return <SkeletonList rows={4} />;
 
     return (
         <div className="fade-in-up">

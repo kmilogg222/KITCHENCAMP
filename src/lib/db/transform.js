@@ -86,7 +86,11 @@ export function transformDbToStoreShape({ suppliers, ingredients, recipeIngredie
 
   // 5. CalendarEvents: reconstruir { "YYYY-MM-DD": events[] } desde filas planas
   // Pasamos storeRecipes y storeMenus para reconstruir los objetos completos que CalendarView espera
-  const storeCalendarEvents = dbCalendarToStore(calendarEvents, storeRecipes, storeMenus);
+  const { events: storeCalendarEvents, warnings: calendarWarnings } =
+    dbCalendarToStore(calendarEvents, storeRecipes, storeMenus);
+  if (calendarWarnings.length > 0) {
+    console.warn('[KitchenCamp] Advertencias de integridad en el calendario:', calendarWarnings);
+  }
 
   return {
     suppliers:      storeSuppliers,
@@ -183,6 +187,7 @@ export function dbCalendarToStore(calendarRows, storeRecipes = [], storeMenus = 
   const recipeMap = new Map(storeRecipes.map(r => [r.id, r]));
   const menuMap   = new Map(storeMenus.map(m => [m.id, m]));
 
+  const warnings = [];
   const result = {};
   for (const row of calendarRows) {
     const dateKey = row.event_date; // ya viene como "YYYY-MM-DD"
@@ -196,10 +201,23 @@ export function dbCalendarToStore(calendarRows, storeRecipes = [], storeMenus = 
     };
 
     if (row.type === 'recipe') {
+      if (row.recipe_id && !recipeMap.has(row.recipe_id)) {
+        warnings.push(`Evento en ${dateKey}: recipe_id "${row.recipe_id}" no encontrado — descartado.`);
+        continue;
+      }
       entry.recipe = recipeMap.get(row.recipe_id);
     } else {
       const menu = menuMap.get(row.menu_id);
+      if (row.menu_id && !menu) {
+        warnings.push(`Evento en ${dateKey}: menu_id "${row.menu_id}" no encontrado — descartado.`);
+        continue;
+      }
       entry.menu = menu;
+      // Detectar recipeIds huérfanos dentro del menú
+      const orphanRids = (menu?.recipeIds ?? []).filter(rid => !recipeMap.has(rid));
+      if (orphanRids.length > 0) {
+        warnings.push(`Menú "${menu?.name}" en ${dateKey}: recipe IDs [${orphanRids.join(', ')}] no encontrados — omitidos del display.`);
+      }
       entry.menuRecipes = (menu?.recipeIds ?? [])
         .map(rid => recipeMap.get(rid))
         .filter(Boolean);
@@ -207,7 +225,7 @@ export function dbCalendarToStore(calendarRows, storeRecipes = [], storeMenus = 
 
     result[dateKey].push(entry);
   }
-  return result;
+  return { events: result, warnings };
 }
 
 // ── Mappers Store → DB (para escritura) ──────────────────────────────────────

@@ -11,7 +11,11 @@ import { commitImport, ENTITY_REGISTRY, CONFLICT_STRATEGIES } from '../lib/io';
 export default function ImportPreviewModal({ preview, meta, onClose }) {
   const [strategy, setStrategy] = useState('skip');
   const [isImporting, setIsImporting] = useState(false);
-  const [expandedEntity, setExpandedEntity] = useState(null);
+  const [pendingConfirm, setPendingConfirm] = useState(false);
+  // Auto-expand la primera entidad con items inválidos; colapsar todo si todo es válido
+  const [expandedEntity, setExpandedEntity] = useState(() =>
+    Object.keys(preview).find(k => (preview[k].invalid?.length ?? 0) > 0) ?? null
+  );
   const [result, setResult] = useState(null);
 
   const addToast = useStore(s => s.addToast);
@@ -35,6 +39,12 @@ export default function ImportPreviewModal({ preview, meta, onClose }) {
 
   // ── Import handler ──
   const handleImport = async () => {
+    // Primer click en modo overwrite: pedir confirmación antes de ejecutar
+    if (strategy === 'overwrite' && !pendingConfirm) {
+      setPendingConfirm(true);
+      return;
+    }
+    setPendingConfirm(false);
     setIsImporting(true);
     try {
       const storeSnapshot = useStore.getState();
@@ -193,7 +203,7 @@ export default function ImportPreviewModal({ preview, meta, onClose }) {
                     name="conflict-strategy"
                     value={s}
                     checked={strategy === s}
-                    onChange={() => setStrategy(s)}
+                    onChange={() => { setStrategy(s); setPendingConfirm(false); }}
                     style={{ accentColor: '#4ecdc4' }}
                   />
                   <span style={{ fontSize: 13, color: '#3d1a78', fontWeight: strategy === s ? 600 : 400 }}>
@@ -234,6 +244,19 @@ export default function ImportPreviewModal({ preview, meta, onClose }) {
           </div>
         )}
 
+        {/* ── Banner de confirmación (solo aparece al hacer click en overwrite) ── */}
+        {pendingConfirm && (
+          <div style={{
+            padding: '10px 14px', borderRadius: 10, marginBottom: 12,
+            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)',
+            fontSize: 13, color: '#b91c1c', fontWeight: 600,
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <AlertTriangle size={15} color="#ef4444" />
+            Esto sobrescribirá {totalDuplicates} elemento{totalDuplicates !== 1 ? 's' : ''} existente{totalDuplicates !== 1 ? 's' : ''}. Haz clic en "Confirmar" para continuar.
+          </div>
+        )}
+
         {/* ── Action buttons ── */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <button className="btn-ghost" onClick={onClose}>
@@ -248,6 +271,10 @@ export default function ImportPreviewModal({ preview, meta, onClose }) {
                 opacity: totalToImport === 0 ? 0.5 : 1,
                 cursor: totalToImport === 0 ? 'not-allowed' : 'pointer',
                 display: 'flex', alignItems: 'center', gap: 8,
+                ...(pendingConfirm && {
+                  background: 'linear-gradient(135deg, #ef4444, #b91c1c)',
+                  boxShadow: '0 4px 12px rgba(239,68,68,0.35)',
+                }),
               }}
             >
               {isImporting ? (
@@ -255,6 +282,8 @@ export default function ImportPreviewModal({ preview, meta, onClose }) {
                   <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} />
                   Importing...
                 </>
+              ) : pendingConfirm ? (
+                'Confirmar Sobrescritura'
               ) : (
                 `Import ${totalToImport} item${totalToImport !== 1 ? 's' : ''}`
               )}

@@ -12,6 +12,7 @@
  */
 import { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
+import SkeletonList from '../components/SkeletonList';
 import {
     ChevronLeft, ChevronRight, Plus, X, UtensilsCrossed,
     ClipboardList, ChevronDown, ChevronUp,
@@ -508,6 +509,9 @@ export default function CalendarView() {
         const dateLabel = `${MONTH_NAMES[month]} ${day}, ${year}`;
         setSelectedDay({ key, label: dateLabel });
     };
+
+    const isHydrating = useStore(s => s.isHydrating);
+    if (isHydrating) return <SkeletonList rows={7} />;
 
     return (
         <div className="fade-in-up">
