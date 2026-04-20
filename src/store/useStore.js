@@ -47,6 +47,7 @@ const storeCreator = (set, get) => ({
 
   // ── Estado de hidratación ─────────────────────────────────────────────────
   isHydrating:    false,  // no bloquea la UI — datos se llenan en background
+  hasHydrated:    false,  // indica que la hidratación ya terminó exitosamente para el usuario actual
   hydrationError: null,
 
   // ── Toasts (notificaciones) ───────────────────────────────────────────────
@@ -75,6 +76,7 @@ const storeCreator = (set, get) => ({
     suppliers:      data.suppliers,
     calendarEvents: data.calendarEvents ?? {},
     isHydrating:    false,
+    hasHydrated:    true,
     hydrationError: null,
   }),
   setHydrationError: (error) => set({ isHydrating: false, hydrationError: error }),
@@ -332,6 +334,7 @@ const storeCreator = (set, get) => ({
     cart:           [],
     calendarEvents: {},
     isHydrating:    false,
+    hasHydrated:    false,
     hydrationError: null,
     toasts:         [],
   }),

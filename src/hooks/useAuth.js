@@ -19,16 +19,16 @@ export function useAuth() {
   const [loading, setLoading]               = useState(true);
   const [needsMigration, setNeedsMigration] = useState(false);
 
-  // Usamos ref para evitar re-renders en la hidratación y prevenir doble-ejecución
-  const hydrating = useRef(false);
-
   // ── Función de hidratación (imperativa, sin hooks extra) ─────────────────
   async function hydrateStore(sessionUser) {
-    if (!USE_SUPABASE || !sessionUser)   return;
-    if (hydrating.current)              return; // evitar doble hidratación (StrictMode)
-    hydrating.current = true;
+    if (!USE_SUPABASE || !sessionUser) return;
+    
+    // Obtener estado global para evitar doble hidratación (incluso en StrictMode)
+    const { isHydrating, hasHydrated, hydrate, setHydrationError, setHydrating } = useStore.getState();
+    
+    // Si ya estamos hidratando, o si ya hidratamos previamente en esta sesión, ignorar
+    if (isHydrating || hasHydrated) return;
 
-    const { hydrate, setHydrationError, setHydrating } = useStore.getState();
     setCurrentUserId(sessionUser.id);
     setHydrating(true);
 
@@ -44,8 +44,6 @@ export function useAuth() {
     } catch (err) {
       console.error('[useAuth] Hydration failed:', err.message);
       setHydrationError(err.message);
-    } finally {
-      hydrating.current = false;
     }
   }
 
@@ -85,7 +83,6 @@ export function useAuth() {
         if (event === 'SIGNED_OUT') {
           setCurrentUserId(null);
           setNeedsMigration(false);
-          hydrating.current = false;
           useStore.getState().resetStore();
         }
       }
