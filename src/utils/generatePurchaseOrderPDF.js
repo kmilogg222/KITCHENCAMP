@@ -195,11 +195,11 @@ function drawMeta(doc, y) {
  * Dibuja la sección de resumen de suppliers.
  * @param {jsPDF} doc
  * @param {number} y
- * @param {object} grouped   - { [supId]: CartItem[] }
- * @param {Supplier[]} sups  - Lista de suppliers.
+ * @param {object} grouped      - { [supId]: CartItem[] }
+ * @param {Map}    supplierMap  - Map de suppliers (id -> Supplier).
  * @returns {number} Nuevo y.
  */
-function drawSupplierSummary(doc, y, grouped, sups) {
+function drawSupplierSummary(doc, y, grouped, supplierMap) {
     // Título de sección
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
@@ -208,7 +208,7 @@ function drawSupplierSummary(doc, y, grouped, sups) {
     y += 5;
 
     Object.entries(grouped).forEach(([supId, items], i) => {
-        const sup = sups.find(s => s.id === supId);
+        const sup = supplierMap.get(supId);
         const subTotal = items.reduce((s, it) => s + it.pricePerPack * it.R, 0);
         const rowH = 7;
         const bg = i % 2 === 0 ? C.offWhite : C.white;
@@ -471,17 +471,20 @@ export function generatePurchaseOrderPDF({ cart, suppliers, grandTotal }) {
         return acc;
     }, {});
 
+    // Cache suppliers in a Map for O(1) lookup
+    const supplierMap = new Map(suppliers.map(s => [s.id, s]));
+
     // ── Página y secciones iniciales ──────────────────────────────────────────
     let y = drawHeader(doc, poNumber, dateStr);
     y = drawMeta(doc, y);
-    y = drawSupplierSummary(doc, y, grouped, suppliers);
+    y = drawSupplierSummary(doc, y, grouped, supplierMap);
 
     // ── Tablas de ítems por supplier ──────────────────────────────────────────
     let globalRowIdx = 0;
     let itemNum = 1;
 
     for (const [supId, items] of Object.entries(grouped)) {
-        const sup = suppliers.find(s => s.id === supId);
+        const sup = supplierMap.get(supId);
 
         // Nueva página si no hay espacio suficiente para el bloque del supplier
         if (y > 235) {
