@@ -13,7 +13,6 @@
  *   7. calendar_events   (FK → recipes/menus)
  */
 import { supabase } from './client';
-import { storeRecipeIngredientsToDb } from './transform';
 
 /**
  * Migra todos los datos de localStorage al usuario autenticado en Supabase.
@@ -203,9 +202,11 @@ export async function migrateLocalDataToDb(userId) {
         let menuId   = null;
 
         if (ev.type === 'recipe') {
-          recipeId = recipeIdMap.get(ev.itemId) ?? recipeIdMap.get(String(ev.itemId));
+          const legacyId = ev.recipe?.id ?? ev.itemId;
+          recipeId = recipeIdMap.get(legacyId) ?? recipeIdMap.get(String(legacyId));
         } else if (ev.type === 'menu') {
-          menuId = menuIdMap.get(ev.itemId);
+          const legacyId = ev.menu?.id ?? ev.itemId;
+          menuId = menuIdMap.get(legacyId);
         }
 
         // Solo insertar si pudimos resolver el item

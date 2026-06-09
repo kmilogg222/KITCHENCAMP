@@ -6,7 +6,7 @@
  * Si USE_SUPABASE = false, renderiza los children directamente (modo localStorage).
  */
 import { useState } from 'react';
-import { useAuthContext } from '../hooks/AuthContext';
+import { useAuthContext } from '../hooks/authContext';
 import { USE_SUPABASE } from '../lib/db/client';
 import { COLORS, INPUT_STYLE } from '../constants/theme';
 import { ChefHat, LogIn, UserPlus, Eye, EyeOff, Loader2 } from 'lucide-react';

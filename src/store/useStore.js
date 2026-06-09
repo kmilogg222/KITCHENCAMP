@@ -328,7 +328,7 @@ const storeCreator = (set, get) => ({
     const { calendarEvents, recipes: storeRecipes, ingredients } = get();
     const { items } = aggregateCalendarDemand(calendarEvents, startDate, endDate, storeRecipes, ingredients);
     const cart = items
-      .filter(({ ingredient }) => !supplierFilter || supplierFilter.has(ingredient.supplier))
+      .filter(({ ingredient }) => !supplierFilter || supplierFilter.has(ingredient.supplierId ?? ingredient.supplier))
       .map(({ ingredient, demandSafe }) => ({
         ingredientId: ingredient.id,
         name:         ingredient.name,

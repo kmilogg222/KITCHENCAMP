@@ -258,9 +258,9 @@ export function storeSupplierToDb(supplier, userId) {
  * @param {Map}    supplierMap - Map<supplierName, supplierId>
  */
 export function storeIngredientToDb(ingredient, userId, supplierMap) {
-  // supplierId puede venir directo (ya tenemos el UUID) o hay que resolverlo por nombre
-  const supplierId = ingredient.supplierId
-    ?? supplierMap?.get(ingredient.supplier)
+  // Priorizar resolución por nombre para capturar cambios del form; supplierId como fallback
+  const supplierId = (ingredient.supplier && supplierMap?.get(ingredient.supplier))
+    ?? ingredient.supplierId
     ?? null;
 
   return {

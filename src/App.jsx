@@ -8,7 +8,8 @@ import React, { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 // ── Auth: proveedor único de sesión ───────────────────────────────────────────
-import { AuthProvider, useAuthContext } from './hooks/AuthContext';
+import { AuthProvider } from './hooks/AuthContext';
+import { useAuthContext } from './hooks/authContext';
 
 // ── Componentes Globales ──────────────────────────────────────────────────────
 import Sidebar         from './components/Sidebar';

@@ -43,34 +43,49 @@ export async function insertCalendarEvent(event, dateKey, userId) {
  * @param {string}   userId
  */
 export async function setCalendarEventsForDate(dateKey, events, userId) {
-  // 1. Borrar todos los eventos de ese día
+  // 1. Si hay eventos nuevos, construir y validar las filas ANTES de borrar
+  if (events && events.length > 0) {
+    const rows = events.map(ev => ({
+      user_id:    userId,
+      event_date: dateKey,
+      slot:       ev.slotKey,
+      type:       ev.type,
+      recipe_id:  ev.type === 'recipe' ? (ev.recipe?.id ?? ev.itemId) : null,
+      menu_id:    ev.type === 'menu'   ? (ev.menu?.id   ?? ev.itemId) : null,
+      note:       ev.note ?? '',
+      groups:     ev.groups ?? { A: 0, B: 0, C: 0 },
+    }));
+
+    // Abortar si algún evento no resolvió su item; evita dejar el día vacío en DB
+    const unresolved = rows.filter(r => !r.recipe_id && !r.menu_id);
+    if (unresolved.length > 0) {
+      return { error: new Error(`${unresolved.length} evento(s) sin recipe_id ni menu_id — operación cancelada`) };
+    }
+
+    // 2. Borrar SOLO si los nuevos rows son válidos
+    const { error: deleteError } = await supabase
+      .from('calendar_events')
+      .delete()
+      .eq('event_date', dateKey)
+      .eq('user_id', userId);
+
+    if (deleteError) return { error: deleteError };
+
+    const { error: insertError } = await supabase
+      .from('calendar_events')
+      .insert(rows);
+
+    return { error: insertError };
+  }
+
+  // 3. Sin eventos nuevos: solo borrar (vaciar el día es intencional)
   const { error: deleteError } = await supabase
     .from('calendar_events')
     .delete()
     .eq('event_date', dateKey)
     .eq('user_id', userId);
 
-  if (deleteError) return { error: deleteError };
-
-  // 2. Si hay eventos nuevos, insertarlos
-  if (!events || events.length === 0) return { error: null };
-
-  const rows = events.map(ev => ({
-    user_id:    userId,
-    event_date: dateKey,
-    slot:       ev.slotKey,
-    type:       ev.type,
-    recipe_id:  ev.type === 'recipe' ? (ev.itemId ?? ev.recipe?.id) : null,
-    menu_id:    ev.type === 'menu'   ? (ev.itemId ?? ev.menu?.id)   : null,
-    note:       ev.note ?? '',
-    groups:     ev.groups ?? { A: 0, B: 0, C: 0 },
-  }));
-
-  const { error: insertError } = await supabase
-    .from('calendar_events')
-    .insert(rows);
-
-  return { error: insertError };
+  return { error: deleteError };
 }
 
 export async function deleteCalendarEventFromDb(eventId) {

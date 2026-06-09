@@ -240,6 +240,7 @@ CREATE TABLE IF NOT EXISTS calendar_events (
     menu_id    uuid REFERENCES menus(id) ON DELETE CASCADE,
     note       text DEFAULT '',
     created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now(),
     -- Constraint: uno de los dos IDs debe estar presente según el type
     CONSTRAINT calendar_event_item_check CHECK (
         (type = 'recipe' AND recipe_id IS NOT NULL AND menu_id IS NULL) OR
