@@ -10,6 +10,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { Download, Upload, FileJson, Check, Database, ArrowUpDown, AlertCircle } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { useShallow } from 'zustand/react/shallow';
 import { exportData, previewImport, ENTITY_REGISTRY, FORMAT_REGISTRY } from '../lib/io';
 import ImportPreviewModal from '../components/ImportPreviewModal';
 
@@ -36,14 +37,16 @@ export default function DataPortalView() {
   const addToast = useStore(s => s.addToast);
 
   // ── Entity counts from store ──
-  const counts = useStore(s =>
+  // useShallow evita re-render infinito: el selector arma un objeto nuevo cada render
+  // y Zustand v5 compara con Object.is; sin comparación superficial → loop (React #185).
+  const counts = useStore(useShallow(s =>
     Object.fromEntries(
       ENTITY_KEYS.map(key => {
         const data = s[ENTITY_REGISTRY[key].storeKey];
         return [key, Array.isArray(data) ? data.length : Object.keys(data ?? {}).length];
       })
     )
-  );
+  ));
 
   // ── Export handler ──
   const handleExport = () => {
