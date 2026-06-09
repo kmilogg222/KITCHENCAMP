@@ -214,11 +214,12 @@ export async function migrateLocalDataToDb(userId) {
         calendarRows.push({
           user_id:    userId,
           event_date: dateKey,
-          slot:       ev.slot,
+          slot:       ev.slot ?? ev.slotKey,
           type:       ev.type,
           recipe_id:  recipeId,
           menu_id:    menuId,
           note:       ev.note ?? '',
+          groups:     ev.groups ?? { A: 0, B: 0, C: 0 },
         });
       }
     }

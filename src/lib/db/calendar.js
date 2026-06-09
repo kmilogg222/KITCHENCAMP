@@ -20,6 +20,7 @@ export async function insertCalendarEvent(event, dateKey, userId) {
     recipe_id:  event.type === 'recipe' ? (event.itemId ?? event.recipe?.id) : null,
     menu_id:    event.type === 'menu'   ? (event.itemId ?? event.menu?.id)   : null,
     note:       event.note ?? '',
+    groups:     event.groups ?? { A: 0, B: 0, C: 0 },
   };
 
   if (event.id && !event.id.startsWith('temp-')) {
@@ -62,6 +63,7 @@ export async function setCalendarEventsForDate(dateKey, events, userId) {
     recipe_id:  ev.type === 'recipe' ? (ev.itemId ?? ev.recipe?.id) : null,
     menu_id:    ev.type === 'menu'   ? (ev.itemId ?? ev.menu?.id)   : null,
     note:       ev.note ?? '',
+    groups:     ev.groups ?? { A: 0, B: 0, C: 0 },
   }));
 
   const { error: insertError } = await supabase

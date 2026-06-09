@@ -198,6 +198,7 @@ export function dbCalendarToStore(calendarRows, storeRecipes = [], storeMenus = 
       type:    row.type,
       slotKey: row.slot, // CalendarView usa slotKey, no slot
       note:    row.note ?? '',
+      groups:  row.groups ?? { A: 0, B: 0, C: 0 },
     };
 
     if (row.type === 'recipe') {

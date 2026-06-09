@@ -18,6 +18,8 @@ import {
     ClipboardList, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { MEAL_SLOTS, INPUT_STYLE } from '../constants/theme';
+import GroupInput from '../components/GroupInput';
+import { defaultGroups } from '../data/mockData';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -64,19 +66,22 @@ function AddMealModal({ dateLabel, recipes, menus = [], onAdd, onClose }) {
     const [selectedRecipe, setSelectedRecipe] = useState(recipes[0]?.id ?? '');
     const [selectedMenu, setSelectedMenu] = useState(menus[0]?.id ?? '');
     const [note, setNote] = useState('');
+    const [groups, setGroups] = useState(defaultGroups.map(g => ({ ...g, count: 0 })));
+    const updateCount = (id, val) => setGroups(prev => prev.map(g => g.id === id ? { ...g, count: val } : g));
 
     const handleAdd = () => {
+        const groupCounts = Object.fromEntries(groups.map(g => [g.id, g.count]));
         if (mode === 'recipe') {
             if (!selectedRecipe) return;
             const recipe = recipes.find(r => String(r.id) === String(selectedRecipe));
             if (!recipe) return;
-            onAdd({ type: 'recipe', slotKey: selectedSlot, recipe, note: note.trim() });
+            onAdd({ type: 'recipe', slotKey: selectedSlot, recipe, note: note.trim(), groups: groupCounts });
         } else {
             if (!selectedMenu) return;
             const menu = menus.find(m => m.id === selectedMenu);
             if (!menu) return;
             const menuRecipes = menu.recipeIds.map(rid => recipes.find(r => r.id === rid)).filter(Boolean);
-            onAdd({ type: 'menu', slotKey: selectedSlot, menu, menuRecipes, note: note.trim() });
+            onAdd({ type: 'menu', slotKey: selectedSlot, menu, menuRecipes, note: note.trim(), groups: groupCounts });
         }
         setNote('');
     };
@@ -219,10 +224,22 @@ function AddMealModal({ dateLabel, recipes, menus = [], onAdd, onClose }) {
                     )}
                 </div>
 
+                {/* Diners by group */}
+                <div style={{ marginBottom: 14 }}>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: '#6b3fa0', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>
+                        👥 Diners by Group
+                    </label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {groups.map(g => (
+                            <GroupInput key={g.id} group={g} value={g.count} onChange={updateCount} />
+                        ))}
+                    </div>
+                </div>
+
                 {/* Optional note */}
                 <div style={{ marginBottom: 22 }}>
                     <label style={{ fontSize: 11, fontWeight: 700, color: '#6b3fa0', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Note (optional)</label>
-                    <input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. 40 servings, VIP event…" style={inputSx} />
+                    <input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. VIP event, allergens…" style={inputSx} />
                 </div>
 
                 {/* Actions */}
@@ -387,6 +404,11 @@ function DayPanel({ dateKey, dateLabel, meals, recipes, menus, onAdd, onRemove, 
                                                 </div>
                                             )}
 
+                                            {meal.groups && (meal.groups.A + meal.groups.B + meal.groups.C) > 0 && (
+                                                <div style={{ fontSize: 11, color: '#6b3fa0', marginTop: 5, fontWeight: 600 }}>
+                                                    👥 {meal.groups.A + meal.groups.B + meal.groups.C} personas
+                                                </div>
+                                            )}
                                             {meal.note && (
                                                 <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, fontStyle: 'italic', background: 'rgba(107,63,160,0.05)', borderRadius: 6, padding: '3px 7px' }}>
                                                     📝 {meal.note}
