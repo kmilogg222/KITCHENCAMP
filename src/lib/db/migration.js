@@ -71,6 +71,7 @@ export async function migrateLocalDataToDb(userId) {
         unit:           ing.unit,
         pack_size:      ing.packSize,
         current_stock:  ing.currentStock,
+        stock_qty:      ing.stockQty ?? ((ing.currentStock ?? 0) * (ing.packSize ?? 1)),
         min_order:      ing.minOrder,
         // Resolver supplier name → UUID
         supplier_id:    supplierIdMap.get(ing.supplier) ?? null,

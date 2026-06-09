@@ -40,7 +40,22 @@ export {
   insertCalendarEvent,
   setCalendarEventsForDate,
   deleteCalendarEventFromDb,
+  setEventCooked,
 } from './calendar';
+
+// ── Stock Movements ───────────────────────────────────────────────────────────
+export {
+  insertStockMovement,
+  deleteMovementsByRef,
+} from './stockMovements';
+
+// ── Purchase Orders ───────────────────────────────────────────────────────────
+export {
+  insertPurchaseOrder,
+  fetchPurchaseOrders,
+  updatePurchaseOrderStatus,
+  deletePurchaseOrder,
+} from './purchaseOrders';
 
 // ── Migración ─────────────────────────────────────────────────────────────────
 export { migrateLocalDataToDb, isUserDbEmpty, hasLocalData } from './migration';

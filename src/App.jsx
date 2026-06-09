@@ -32,6 +32,7 @@ const InventoryView    = React.lazy(() => import('./views/InventoryView'));
 const SuppliersView    = React.lazy(() => import('./views/SuppliersView'));
 const CartView         = React.lazy(() => import('./views/CartView'));
 const DataPortalView   = React.lazy(() => import('./views/DataPortalView'));
+const OrdersView       = React.lazy(() => import('./views/OrdersView'));
 
 // ── Loaders ───────────────────────────────────────────────────────────────────
 function FallbackLoader() {
@@ -106,6 +107,7 @@ function AppContent() {
                 <Route path="/inventory"        element={<InventoryView />} />
                 <Route path="/suppliers"        element={<SuppliersView />} />
                 <Route path="/cart"             element={<CartView />} />
+                <Route path="/orders"           element={<OrdersView />} />
                 <Route path="/data"             element={<DataPortalView />} />
                 <Route path="*"                 element={<Navigate to="/dashboard" replace />} />
               </Routes>

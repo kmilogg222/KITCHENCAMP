@@ -12,6 +12,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import { INGREDIENT_UNITS } from '../constants/theme';
 import { Label, TInput, SInput } from '../components/FormControls';
+import { compatibleUnits } from '../utils/units';
 
 
 // ── Empty ingredient slot ─────────────────────────────────────────────────────
@@ -23,6 +24,7 @@ const blankSlot = (idx) => ({
     portionByGroup: { A: '', B: '', C: '' },
     inputMode: 'per-person', // 'per-person' | 'yield'
     quantityForBase: '',     // used when inputMode === 'yield'
+    recipeUnit: '',          // unit used in recipe (empty = inherit from catalog)
     // below only for mode=new
     name: '', unit: 'g', packSize: '', currentStock: '', minOrder: '',
     supplier: 'SISCO', pricePerPack: '', substitutable: false, substitute: '',
@@ -41,6 +43,7 @@ function slotsFromRecipe(recipe, catalog) {
             portionByGroup: { A: ref.portionByGroup?.A ?? '', B: ref.portionByGroup?.B ?? '', C: ref.portionByGroup?.C ?? '' },
             inputMode: ref.inputMode ?? 'per-person',
             quantityForBase: ref.quantityForBase ?? '',
+            recipeUnit: ref.unit ?? (cat?.unit ?? 'g'),
             // populated from catalog for display only:
             name: cat?.name ?? '', unit: cat?.unit ?? 'g', packSize: cat?.packSize ?? '',
             currentStock: cat?.currentStock ?? '', minOrder: cat?.minOrder ?? '',
@@ -147,6 +150,7 @@ function IngredientSlot({ slot, index, catalog, onChange, onRemove, errors, base
                                 if (ing) {
                                     onChange(index, 'name', ing.name);
                                     onChange(index, 'unit', ing.unit);
+                                    onChange(index, 'recipeUnit', ing.unit); // reset to catalog unit
                                 }
                             }}
                             style={{
@@ -269,9 +273,19 @@ function IngredientSlot({ slot, index, catalog, onChange, onRemove, errors, base
                                 👥 Portion per person
                             </span>
                             {slot.mode === 'existing' && selectedIng ? (
-                                <span style={{ fontSize: 11, fontWeight: 600, color: '#4ecdc4', background: 'rgba(78,205,196,0.12)', padding: '1px 7px', borderRadius: 5 }}>
-                                    {selectedIng.unit}
-                                </span>
+                                <>
+                                    <select
+                                        value={slot.recipeUnit || selectedIng.unit}
+                                        onChange={e => update('recipeUnit', e.target.value)}
+                                        style={{ fontSize: 11, fontWeight: 600, padding: '2px 6px', borderRadius: 6, border: '1.5px solid rgba(78,205,196,0.4)', background: 'rgba(255,255,255,0.9)', color: '#1f2937', cursor: 'pointer' }}>
+                                        {compatibleUnits(selectedIng.unit).map(u => <option key={u} value={u}>{u}</option>)}
+                                    </select>
+                                    {(slot.recipeUnit && slot.recipeUnit !== selectedIng.unit) && (
+                                        <span style={{ fontSize: 10, color: '#9b6dca', background: 'rgba(107,63,160,0.08)', padding: '1px 6px', borderRadius: 4 }}>
+                                            stock in {selectedIng.unit}
+                                        </span>
+                                    )}
+                                </>
                             ) : (
                                 <select value={slot.unit} onChange={e => update('unit', e.target.value)}
                                     style={{ fontSize: 11, fontWeight: 600, padding: '2px 6px', borderRadius: 6, border: '1.5px solid rgba(78,205,196,0.4)', background: 'rgba(255,255,255,0.9)', color: '#1f2937', cursor: 'pointer' }}>
@@ -481,8 +495,15 @@ export default function CreateRecipeView() {
                 const wasteField = s.wastePct !== '' && Number(s.wastePct) > 0
                     ? { wastePct: Number(s.wastePct) }
                     : {};
+                // Only persist recipeUnit if it differs from the catalog unit
+                const catalogUnit = s.mode === 'existing'
+                    ? ingredientsCatalog.find(c => c.id === ingredientId)?.unit
+                    : s.unit;
+                const unitField = (s.recipeUnit && s.recipeUnit !== catalogUnit)
+                    ? { unit: s.recipeUnit }
+                    : {};
                 if (s.inputMode === 'yield') {
-                    return { ingredientId, inputMode: 'yield', quantityForBase: Number(String(s.quantityForBase).trim()), ...wasteField };
+                    return { ingredientId, inputMode: 'yield', quantityForBase: Number(String(s.quantityForBase).trim()), ...wasteField, ...unitField };
                 } else {
                     return {
                         ingredientId,
@@ -493,6 +514,7 @@ export default function CreateRecipeView() {
                             C: Number(s.portionByGroup.C) || 0,
                         },
                         ...wasteField,
+                        ...unitField,
                     };
                 }
             });
@@ -720,7 +742,7 @@ export default function CreateRecipeView() {
                         <div style={{ maxHeight: 140, overflowY: 'auto' }}>
                             {ingredientsCatalog.map(ing => (
                                 <div key={ing.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', borderBottom: '1px solid rgba(155,109,202,0.1)' }}>
-                                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: ing.currentStock <= ing.minOrder ? '#ef4444' : '#4ecdc4', flexShrink: 0 }} />
+                                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: (ing.stockQty ?? (ing.currentStock * ing.packSize)) <= ing.minOrder * ing.packSize ? '#ef4444' : '#4ecdc4', flexShrink: 0 }} />
                                     <span style={{ fontSize: 12, color: '#374151', flex: 1 }}>{ing.name}</span>
                                     <span style={{ fontSize: 10, color: '#9b6dca' }}>{ing.unit}</span>
                                 </div>

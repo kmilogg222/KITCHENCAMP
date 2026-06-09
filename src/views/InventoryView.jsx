@@ -32,15 +32,24 @@ import SkeletonList from '../components/SkeletonList';
 const inputSx = INPUT_STYLE;
 
 // ── Stock stepper ─────────────────────────────────────────────────────────────
-function StockStepper({ value, onChange }) {
+// Cada click suma/resta un pack (packSize) sobre stockQty
+function StockStepper({ stockQty, packSize, unit, onChange }) {
+    const packs = packSize > 0 ? (stockQty / packSize) : 0;
     return (
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <button onClick={() => onChange(Math.max(0, value - 1))}
+            <button onClick={() => onChange(Math.max(0, stockQty - packSize))}
                 style={{ background: 'rgba(107,63,160,0.1)', border: 'none', borderRadius: 6, width: 26, height: 26, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <ChevronDown size={14} color="#6b3fa0" />
             </button>
-            <span style={{ fontWeight: 700, fontSize: 15, color: '#3d1a78', minWidth: 28, textAlign: 'center' }}>{value}</span>
-            <button onClick={() => onChange(value + 1)}
+            <div style={{ textAlign: 'center', minWidth: 52 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#3d1a78', lineHeight: 1.1 }}>
+                    {stockQty.toLocaleString()} {unit}
+                </div>
+                <div style={{ fontSize: 9, color: '#9b6dca', lineHeight: 1 }}>
+                    ≈ {packs % 1 === 0 ? packs : packs.toFixed(1)} packs
+                </div>
+            </div>
+            <button onClick={() => onChange(stockQty + packSize)}
                 style={{ background: 'rgba(107,63,160,0.1)', border: 'none', borderRadius: 6, width: 26, height: 26, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <ChevronUp size={14} color="#6b3fa0" />
             </button>
@@ -52,10 +61,12 @@ function StockStepper({ value, onChange }) {
 function IngredientModal({ ingredient, supplierIds = [], onSave, onClose }) {
     const isNew = !ingredient.id;
     const catalogIngredients = useStore(state => state.ingredients);
+    const packSize = ingredient.packSize ?? 1;
     const [form, setForm] = useState({
         name: ingredient.name ?? '',
         unit: ingredient.unit ?? 'g',
         packSize: ingredient.packSize ?? '',
+        stockQty: ingredient.stockQty ?? ((ingredient.currentStock ?? 0) * packSize),
         currentStock: ingredient.currentStock ?? 0,
         minOrder: ingredient.minOrder ?? 1,
         supplier: ingredient.supplier ?? 'SISCO',
@@ -83,13 +94,16 @@ function IngredientModal({ ingredient, supplierIds = [], onSave, onClose }) {
 
     const handleSave = () => {
         if (!validate()) return;
+        const newPackSize = Number(form.packSize);
+        const newStockQty = Number(form.stockQty) || 0;
         onSave({
             ...ingredient,
             id: ingredient.id ?? crypto.randomUUID(),
             name: form.name.trim(),
             unit: form.unit,
-            packSize: Number(form.packSize),
-            currentStock: Number(form.currentStock),
+            packSize: newPackSize,
+            stockQty: newStockQty,
+            currentStock: newPackSize > 0 ? Math.round(newStockQty / newPackSize) : 0,
             minOrder: Number(form.minOrder) || 1,
             supplier: form.supplier,
             pricePerPack: Number(form.pricePerPack),
@@ -137,18 +151,29 @@ function IngredientModal({ ingredient, supplierIds = [], onSave, onClose }) {
 
                 {/* Pack, Stock, Min, Price */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 12 }}>
-                    {[
-                        { key: 'packSize', label: `Pack (${form.unit}) *`, ph: '2000' },
-                        { key: 'currentStock', label: 'Stock (packs)', ph: '0' },
-                        { key: 'minOrder', label: 'Min. Order', ph: '1' },
-                        { key: 'pricePerPack', label: 'Price/pack ($) *', ph: '0.00' },
-                    ].map(({ key, label, ph }) => (
-                        <div key={key}>
-                            <label style={{ fontSize: 11, fontWeight: 700, color: '#6b3fa0', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>{label}</label>
-                            <input type="number" min={0} value={form[key]} onChange={e => set(key, e.target.value)} placeholder={ph} style={inputSx} />
-                            {errors[key] && <span style={{ fontSize: 11, color: '#ef4444' }}>{errors[key]}</span>}
-                        </div>
-                    ))}
+                    <div>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: '#6b3fa0', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Pack ({form.unit}) *</label>
+                        <input type="number" min={0} value={form.packSize} onChange={e => set('packSize', e.target.value)} placeholder="2000" style={inputSx} />
+                        {errors.packSize && <span style={{ fontSize: 11, color: '#ef4444' }}>{errors.packSize}</span>}
+                    </div>
+                    <div>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: '#6b3fa0', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Stock ({form.unit})</label>
+                        <input type="number" min={0} value={form.stockQty} onChange={e => set('stockQty', e.target.value)} placeholder="0" style={inputSx} />
+                        {Number(form.packSize) > 0 && (
+                            <span style={{ fontSize: 10, color: '#9b6dca' }}>
+                                ≈ {(Number(form.stockQty) / Number(form.packSize)).toFixed(1)} packs
+                            </span>
+                        )}
+                    </div>
+                    <div>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: '#6b3fa0', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Min. Order</label>
+                        <input type="number" min={0} value={form.minOrder} onChange={e => set('minOrder', e.target.value)} placeholder="1" style={inputSx} />
+                    </div>
+                    <div>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: '#6b3fa0', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Price/pack ($) *</label>
+                        <input type="number" min={0} value={form.pricePerPack} onChange={e => set('pricePerPack', e.target.value)} placeholder="0.00" style={inputSx} />
+                        {errors.pricePerPack && <span style={{ fontSize: 11, color: '#ef4444' }}>{errors.pricePerPack}</span>}
+                    </div>
                 </div>
 
                 {/* Supplier */}
@@ -234,12 +259,16 @@ export default function InventoryView() {
         const matchSearch = ing.name.toLowerCase().includes(search.toLowerCase()) ||
             ing.supplier.toLowerCase().includes(search.toLowerCase());
         const matchSupplier = filterSupplier === 'all' || ing.supplier === filterSupplier;
-        const isLow = ing.currentStock <= ing.minOrder;
+        const sq = ing.stockQty ?? ((ing.currentStock ?? 0) * (ing.packSize ?? 1));
+        const isLow = sq <= ing.minOrder * (ing.packSize ?? 1);
         const matchStatus = filterStatus === 'all' || (filterStatus === 'low' ? isLow : !isLow);
         return matchSearch && matchSupplier && matchStatus;
     }), [ingredients, search, filterSupplier, filterStatus]);
 
-    const lowCount = useMemo(() => ingredients.filter(i => i.currentStock <= i.minOrder).length, [ingredients]);
+    const lowCount = useMemo(() => ingredients.filter(i => {
+        const sq = i.stockQty ?? ((i.currentStock ?? 0) * (i.packSize ?? 1));
+        return sq <= i.minOrder * (i.packSize ?? 1);
+    }).length, [ingredients]);
 
     const handleDelete = (ing) => {
         confirmDelete(ing.id, onDeleteIngredient);
@@ -331,8 +360,10 @@ export default function InventoryView() {
                 </div>
             ) : (
                 filtered.map(ing => {
-                    const isLow = ing.currentStock <= ing.minOrder;
-                    const pct = Math.min((ing.currentStock / Math.max(ing.minOrder * 3, 1)) * 100, 100);
+                    const sq = ing.stockQty ?? ((ing.currentStock ?? 0) * (ing.packSize ?? 1));
+                    const threshold = ing.minOrder * (ing.packSize ?? 1);
+                    const isLow = sq <= threshold;
+                    const pct = Math.min((sq / Math.max(threshold * 3, 1)) * 100, 100);
                     const usedIn = usedInRecipes(ing.id);
                     const color = supColor(ing.supplier);
 
@@ -385,8 +416,13 @@ export default function InventoryView() {
                                 {/* Stock (with stepper) */}
                                 <div>
                                     <StockStepper
-                                        value={ing.currentStock}
-                                        onChange={v => onUpdateIngredient({ ...ing, currentStock: v })}
+                                        stockQty={sq}
+                                        packSize={ing.packSize ?? 1}
+                                        unit={ing.unit}
+                                        onChange={newQty => {
+                                            const newPacks = ing.packSize > 0 ? Math.round(newQty / ing.packSize) : 0;
+                                            onUpdateIngredient({ ...ing, stockQty: newQty, currentStock: newPacks });
+                                        }}
                                     />
                                     <div style={{ fontSize: 10, color: isLow ? '#ef4444' : '#9b6dca', fontWeight: isLow ? 700 : 400, marginTop: 2 }}>
                                         {isLow ? 'Low stock!' : 'OK'}

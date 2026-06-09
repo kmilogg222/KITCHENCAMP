@@ -23,6 +23,8 @@ export async function fetchAllUserData() {
     menusRes,
     menuRecipesRes,
     calendarRes,
+    purchaseOrdersRes,
+    purchaseOrderItemsRes,
   ] = await Promise.all([
     supabase.from('suppliers').select('*'),
     supabase.from('ingredients').select('*'),
@@ -31,6 +33,8 @@ export async function fetchAllUserData() {
     supabase.from('menus').select('*').order('created_at'),
     supabase.from('menu_recipes').select('*').order('position'),
     supabase.from('calendar_events').select('*'),
+    supabase.from('purchase_orders').select('*').order('created_at', { ascending: false }),
+    supabase.from('purchase_order_items').select('*'),
   ]);
 
   // Verificar errores en todas las peticiones
@@ -42,20 +46,52 @@ export async function fetchAllUserData() {
     menus: menusRes,
     menu_recipes: menuRecipesRes,
     calendar_events: calendarRes,
+    purchase_orders: purchaseOrdersRes,
+    purchase_order_items: purchaseOrderItemsRes,
   };
   for (const [key, res] of Object.entries(checks)) {
     if (res.error) throw new Error(`Error fetching ${key}: ${res.error.message}`);
   }
 
-  return transformDbToStoreShape({
-    suppliers:         suppliersRes.data,
-    ingredients:       ingredientsRes.data,
-    recipes:           recipesRes.data,
-    recipeIngredients: recipeIngredientsRes.data,
-    menus:             menusRes.data,
-    menuRecipes:       menuRecipesRes.data,
-    calendarEvents:    calendarRes.data,
-  });
+  const itemsByPo = (purchaseOrderItemsRes.data ?? []).reduce((acc, item) => {
+    if (!acc[item.po_id]) acc[item.po_id] = [];
+    acc[item.po_id].push(item);
+    return acc;
+  }, {});
+
+  const purchaseOrders = (purchaseOrdersRes.data ?? []).map(o => ({
+    id:           o.id,
+    status:       o.status,
+    deliveryDate: o.delivery_date ?? null,
+    startDate:    o.start_date    ?? null,
+    endDate:      o.end_date      ?? null,
+    total:        o.total,
+    createdAt:    o.created_at,
+    receivedAt:   o.received_at   ?? null,
+    items:        (itemsByPo[o.id] ?? []).map(i => ({
+      id:           i.id,
+      ingredientId: i.ingredient_id,
+      name:         i.name_snapshot,
+      supplier:     i.supplier_snapshot,
+      R:            i.packs,
+      packSize:     i.pack_size,
+      unit:         i.unit,
+      pricePerPack: i.price_per_pack,
+    })),
+  }));
+
+  return {
+    ...transformDbToStoreShape({
+      suppliers:         suppliersRes.data,
+      ingredients:       ingredientsRes.data,
+      recipes:           recipesRes.data,
+      recipeIngredients: recipeIngredientsRes.data,
+      menus:             menusRes.data,
+      menuRecipes:       menuRecipesRes.data,
+      calendarEvents:    calendarRes.data,
+    }),
+    purchaseOrders,
+  };
 }
 
 // ── Transformación DB → Store ─────────────────────────────────────────────────
@@ -116,15 +152,18 @@ export function dbSupplierToStore(s) {
 }
 
 export function dbIngredientToStore(ing, supplierMap) {
+  const packSize = ing.pack_size ?? 1;
+  const currentStock = ing.current_stock ?? 0;
   return {
     id:            ing.id,
     name:          ing.name,
     unit:          ing.unit,
-    packSize:      ing.pack_size,
-    currentStock:  ing.current_stock,
+    packSize,
+    currentStock,
+    stockQty:      ing.stock_qty ?? (currentStock * packSize),
     minOrder:      ing.min_order,
-    supplier:      supplierMap?.get(ing.supplier_id) ?? '',   // name para compatibilidad
-    supplierId:    ing.supplier_id,                            // UUID para escritura
+    supplier:      supplierMap?.get(ing.supplier_id) ?? '',
+    supplierId:    ing.supplier_id,
     pricePerPack:  ing.price_per_pack,
     substitutable: ing.substitutable,
     substitute:    ing.substitute ?? '',
@@ -144,6 +183,7 @@ export function dbRecipeToStore(recipe, recipeIngRows, _ingredientMap) {
       ref.quantityForBase = ri.quantity_for_base ?? 0;
     }
     if (ri.waste_pct) ref.wastePct = ri.waste_pct;
+    if (ri.unit) ref.unit = ri.unit;
     return ref;
   });
 
@@ -194,11 +234,13 @@ export function dbCalendarToStore(calendarRows, storeRecipes = [], storeMenus = 
     if (!result[dateKey]) result[dateKey] = [];
 
     const entry = {
-      id:      row.id,
-      type:    row.type,
-      slotKey: row.slot, // CalendarView usa slotKey, no slot
-      note:    row.note ?? '',
-      groups:  row.groups ?? { A: 0, B: 0, C: 0 },
+      id:       row.id,
+      type:     row.type,
+      slotKey:  row.slot,
+      note:     row.note ?? '',
+      groups:   row.groups ?? { A: 0, B: 0, C: 0 },
+      cooked:   row.cooked ?? false,
+      cookedAt: row.cooked_at ?? null,
     };
 
     if (row.type === 'recipe') {
@@ -263,6 +305,7 @@ export function storeIngredientToDb(ingredient, userId, supplierMap) {
     ?? ingredient.supplierId
     ?? null;
 
+  const stockQty = ingredient.stockQty ?? (ingredient.currentStock ?? 0) * (ingredient.packSize ?? 1);
   return {
     id:             ingredient.id,
     user_id:        userId,
@@ -270,6 +313,7 @@ export function storeIngredientToDb(ingredient, userId, supplierMap) {
     unit:           ingredient.unit,
     pack_size:      ingredient.packSize,
     current_stock:  ingredient.currentStock,
+    stock_qty:      stockQty,
     min_order:      ingredient.minOrder,
     supplier_id:    supplierId,
     price_per_pack: ingredient.pricePerPack,
@@ -301,13 +345,14 @@ export function storeRecipeToDb(recipe, userId) {
  */
 export function storeRecipeIngredientsToDb(recipeId, ingredients, userId) {
   return ingredients.map(ref => ({
-    recipe_id:        recipeId,
-    ingredient_id:    ref.ingredientId,
-    user_id:          userId,
-    input_mode:       ref.inputMode ?? 'per-person',
-    portion_by_group: ref.portionByGroup ?? null,
+    recipe_id:         recipeId,
+    ingredient_id:     ref.ingredientId,
+    user_id:           userId,
+    input_mode:        ref.inputMode ?? 'per-person',
+    portion_by_group:  ref.portionByGroup ?? null,
     quantity_for_base: ref.quantityForBase ?? null,
-    waste_pct:        ref.wastePct ?? 0,
+    waste_pct:         ref.wastePct ?? 0,
+    unit:              ref.unit ?? null,
   }));
 }
 

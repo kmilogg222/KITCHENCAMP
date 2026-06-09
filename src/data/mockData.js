@@ -17,6 +17,8 @@
  * @module mockData
  */
 
+import { convert } from '../utils/units';
+
 // ── INGREDIENT CATALOG ───────────────────────────────────────────────────────
 export const ingredientsCatalog = [
     {
@@ -25,6 +27,7 @@ export const ingredientsCatalog = [
         unit: 'g',
         packSize: 2000,
         currentStock: 6,
+        stockQty: 12000,
         minOrder: 2,
         supplier: 'SISCO',
         pricePerPack: 28,
@@ -37,6 +40,7 @@ export const ingredientsCatalog = [
         unit: 'g',
         packSize: 1000,
         currentStock: 3,
+        stockQty: 3000,
         minOrder: 1,
         supplier: 'Driscoll',
         pricePerPack: 12,
@@ -49,6 +53,7 @@ export const ingredientsCatalog = [
         unit: 'g',
         packSize: 500,
         currentStock: 2,
+        stockQty: 1000,
         minOrder: 1,
         supplier: 'SISCO',
         pricePerPack: 9,
@@ -61,6 +66,7 @@ export const ingredientsCatalog = [
         unit: 'ml',
         packSize: 1000,
         currentStock: 1,
+        stockQty: 1000,
         minOrder: 1,
         supplier: 'FreshFarm',
         pricePerPack: 7,
@@ -73,6 +79,7 @@ export const ingredientsCatalog = [
         unit: 'g',
         packSize: 1000,
         currentStock: 3,
+        stockQty: 3000,
         minOrder: 1,
         supplier: 'Driscoll',
         pricePerPack: 6,
@@ -85,6 +92,7 @@ export const ingredientsCatalog = [
         unit: 'units',
         packSize: 30,
         currentStock: 2,
+        stockQty: 60,
         minOrder: 1,
         supplier: 'FreshFarm',
         pricePerPack: 8,
@@ -97,6 +105,7 @@ export const ingredientsCatalog = [
         unit: 'ml',
         packSize: 3000,
         currentStock: 2,
+        stockQty: 6000,
         minOrder: 1,
         supplier: 'SISCO',
         pricePerPack: 15,
@@ -109,6 +118,7 @@ export const ingredientsCatalog = [
         unit: 'g',
         packSize: 1000,
         currentStock: 4,
+        stockQty: 4000,
         minOrder: 2,
         supplier: 'FreshFarm',
         pricePerPack: 5,
@@ -121,6 +131,7 @@ export const ingredientsCatalog = [
         unit: 'ml',
         packSize: 500,
         currentStock: 3,
+        stockQty: 1500,
         minOrder: 1,
         supplier: 'Driscoll',
         pricePerPack: 10,
@@ -133,6 +144,7 @@ export const ingredientsCatalog = [
         unit: 'g',
         packSize: 500,
         currentStock: 2,
+        stockQty: 1000,
         minOrder: 1,
         supplier: 'Driscoll',
         pricePerPack: 14,
@@ -145,6 +157,7 @@ export const ingredientsCatalog = [
         unit: 'g',
         packSize: 500,
         currentStock: 2,
+        stockQty: 1000,
         minOrder: 1,
         supplier: 'SISCO',
         pricePerPack: 6,
@@ -274,14 +287,16 @@ export const defaultGroups = [
 // R       = ⌈D_safe / V⌉      packs to order
 
 /**
- * Packs a ordenar descontando stock disponible y respetando mínimo de pedido.
- * netPacks = max(0, ceil(demandSafe / packSize) - currentStock)
- * R = netPacks > 0 ? max(netPacks, minOrder) : 0
+ * Packs a ordenar descontando stock disponible (en unidad base) y respetando mínimo.
+ * @param {number} demandSafe - Demanda segura en unidad base
+ * @param {number} packSize   - Tamaño de pack en unidad base
+ * @param {number} stockQty   - Stock actual en unidad base (no en packs)
+ * @param {number} minOrder   - Mínimo de packs a pedir
  */
-export function computeOrderPacks(demandSafe, packSize, currentStock = 0, minOrder = 1) {
+export function computeOrderPacks(demandSafe, packSize, stockQty = 0, minOrder = 1) {
   if (!packSize || packSize <= 0) return 0;
-  const grossPacks = Math.ceil(demandSafe / packSize);
-  const netPacks = Math.max(0, grossPacks - (currentStock ?? 0));
+  const netQty = Math.max(0, demandSafe - (stockQty ?? 0));
+  const netPacks = Math.ceil(netQty / packSize);
   if (netPacks <= 0) return 0;
   return Math.max(netPacks, minOrder ?? 1);
 }
@@ -345,7 +360,22 @@ export function resolveIngredients(recipe, catalog) {
         .map(ref => {
             const ing = catalogIndex.get(ref.ingredientId);
             if (!ing) return null;
-            return { ...ing, portionByGroup: resolvePortionByGroup(ref, recipe), wastePct: ref.wastePct || 0 };
+            let portionByGroup = resolvePortionByGroup(ref, recipe);
+            // Convert from recipe unit to catalog unit when they differ
+            if (ref.unit && ref.unit !== ing.unit) {
+                const converted = {};
+                for (const [gId, v] of Object.entries(portionByGroup)) {
+                    const c = convert(v, ref.unit, ing.unit);
+                    if (c === null) {
+                        console.warn(`[resolveIngredients] Incompatible units: ${ref.unit} → ${ing.unit} for ingredient ${ref.ingredientId}`);
+                        converted[gId] = v;
+                    } else {
+                        converted[gId] = c;
+                    }
+                }
+                portionByGroup = converted;
+            }
+            return { ...ing, portionByGroup, wastePct: ref.wastePct || 0 };
         })
         .filter(Boolean);
 }
@@ -397,8 +427,16 @@ export function calcMenuRequisition(menu, allRecipes, catalog, groups) {
             const cat = catalogIndex.get(ref.ingredientId);
             if (!cat) return;
 
-            // Resolve to { A, B, C } before accumulating (supports yield mode refs)
-            const resolved = resolvePortionByGroup(ref, recipe);
+            // Resolve to { A, B, C } in catalog unit before accumulating
+            let resolved = resolvePortionByGroup(ref, recipe);
+            if (ref.unit && ref.unit !== cat.unit) {
+                const converted = {};
+                for (const [gId, v] of Object.entries(resolved)) {
+                    const c = convert(v, ref.unit, cat.unit);
+                    converted[gId] = c !== null ? c : v;
+                }
+                resolved = converted;
+            }
 
             if (ingredientMap.has(ref.ingredientId)) {
                 const entry = ingredientMap.get(ref.ingredientId);
@@ -428,6 +466,42 @@ export function calcMenuRequisition(menu, allRecipes, catalog, groups) {
     }));
 
     return { consolidated, byRecipe };
+}
+
+/**
+ * Calcula el consumo real (sin margen de seguridad) de ingredientes para un evento del calendario.
+ * Aplica el porcentaje de merma pero NO el +10% de seguridad (eso es solo para compras).
+ *
+ * @param {object}   event   - CalendarEvent del store { type, recipe?, menu?, groups }
+ * @param {Map}      recipeIndex  - Map<recipeId, recipe>
+ * @param {object[]} catalog - Array de ingredientes del catálogo
+ * @returns {Array<{ ingredientId: string, qtyBase: number }>}
+ */
+export function calcConsumption(event, recipeIndex, catalog) {
+  const catalogIndex = catalog instanceof Map ? catalog : new Map(catalog.map(i => [i.id, i]));
+  const groups = [
+    { id: 'A', count: event.groups?.A ?? 0 },
+    { id: 'B', count: event.groups?.B ?? 0 },
+    { id: 'C', count: event.groups?.C ?? 0 },
+  ];
+
+  const eventRecipes = event.type === 'menu'
+    ? (event.menu?.recipeIds ?? []).map(rid => recipeIndex.get(rid)).filter(Boolean)
+    : [recipeIndex.get(event.recipe?.id)].filter(Boolean);
+
+  const consumptionMap = new Map();
+
+  for (const recipe of eventRecipes) {
+    const resolved = resolveIngredients(recipe, catalogIndex);
+    for (const ing of resolved) {
+      const D = groups.reduce((acc, g) => acc + g.count * (ing.portionByGroup[g.id] ?? 0), 0);
+      const wasteFactor = 1 + (ing.wastePct || 0) / 100;
+      const consumed = D * wasteFactor;
+      consumptionMap.set(ing.id, (consumptionMap.get(ing.id) ?? 0) + consumed);
+    }
+  }
+
+  return Array.from(consumptionMap.entries()).map(([ingredientId, qtyBase]) => ({ ingredientId, qtyBase }));
 }
 
 /**

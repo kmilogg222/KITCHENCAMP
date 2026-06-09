@@ -16,7 +16,7 @@ import { useStore } from '../store/useStore';
 import SkeletonList from '../components/SkeletonList';
 import {
     ChevronLeft, ChevronRight, Plus, X, UtensilsCrossed,
-    ClipboardList, ChevronDown, ChevronUp,
+    ClipboardList, ChevronDown, ChevronUp, CheckCircle2, RotateCcw,
 } from 'lucide-react';
 import { MEAL_SLOTS, INPUT_STYLE } from '../constants/theme';
 import GroupInput from '../components/GroupInput';
@@ -261,7 +261,7 @@ function AddMealModal({ dateLabel, recipes, menus = [], onAdd, onClose }) {
 }
 
 // ── Day Detail Panel ──────────────────────────────────────────────────────────
-function DayPanel({ dateKey, dateLabel, meals, recipes, menus, onAdd, onRemove, onClose }) {
+function DayPanel({ dateKey, dateLabel, meals, recipes, menus, onAdd, onRemove, onCook, onUncook, onClose }) {
     const [showAddModal, setShowAddModal] = useState(false);
     const [expandedMenus, setExpandedMenus] = useState({});
     const totalMeals = meals.length;
@@ -415,6 +415,23 @@ function DayPanel({ dateKey, dateLabel, meals, recipes, menus, onAdd, onRemove, 
                                                     📝 {meal.note}
                                                 </div>
                                             )}
+                                            {/* Cook / Uncook button */}
+                                            <div style={{ marginTop: 8 }}>
+                                                {meal.cooked ? (
+                                                    <button
+                                                        onClick={() => onUncook(meal.id)}
+                                                        style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 7, border: '1px solid rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.1)', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: '#10b981' }}>
+                                                        <CheckCircle2 size={12} /> Cooked · Undo
+                                                        <RotateCcw size={10} style={{ marginLeft: 2 }} />
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => onCook(meal.id)}
+                                                        style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 7, border: '1px solid rgba(107,63,160,0.3)', background: 'rgba(107,63,160,0.07)', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: '#6b3fa0' }}>
+                                                        <UtensilsCrossed size={12} /> Mark as cooked
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     ))
                                 )}
@@ -576,6 +593,8 @@ export default function CalendarView() {
     // meals: { [dateKey]: [{id, type, slotKey, recipe?, menu?, menuRecipes?, note}] }
     const meals = useStore(state => state.calendarEvents);
     const setMeals = useStore(state => state.setCalendarEvents);
+    const cookCalendarEvent = useStore(state => state.cookCalendarEvent);
+    const uncookCalendarEvent = useStore(state => state.uncookCalendarEvent);
 
     const prev = () => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); };
     const next = () => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); };
@@ -842,6 +861,8 @@ export default function CalendarView() {
                     menus={menus}
                     onAdd={addMeal}
                     onRemove={(mealId) => removeMeal(selectedDay.key, mealId)}
+                    onCook={(mealId) => cookCalendarEvent(selectedDay.key, mealId)}
+                    onUncook={(mealId) => uncookCalendarEvent(selectedDay.key, mealId)}
                     onClose={() => setSelectedDay(null)}
                 />
             )}

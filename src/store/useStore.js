@@ -10,7 +10,7 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ingredientsCatalog, recipes, menus, suppliers, computeOrderPacks, aggregateCalendarDemand } from '../data/mockData';
+import { ingredientsCatalog, recipes, menus, suppliers, computeOrderPacks, aggregateCalendarDemand, calcConsumption } from '../data/mockData';
 import { USE_SUPABASE } from '../lib/db/client';
 
 // ── Importaciones de DB (solo se usan cuando USE_SUPABASE = true) ─────────────
@@ -19,7 +19,9 @@ import {
   insertIngredient, updateIngredientInDb, deleteIngredientFromDb, updateStockInDb,
   insertRecipeWithIngredients, updateRecipeWithIngredients, deleteRecipeFromDb,
   insertMenuWithRecipes, updateMenuWithRecipes, deleteMenuFromDb,
-  setCalendarEventsForDate,
+  setCalendarEventsForDate, setEventCooked,
+  insertStockMovement, deleteMovementsByRef,
+  insertPurchaseOrder, fetchPurchaseOrders, updatePurchaseOrderStatus, deletePurchaseOrder as deletePurchaseOrderFromDb,
   mapSupabaseError,
 } from '../lib/db';
 
@@ -45,6 +47,7 @@ const storeCreator = (set, get) => ({
   cart:           [],
   cartMeta:       { deliveryDate: null, startDate: null, endDate: null },
   calendarEvents: {},
+  purchaseOrders: [],
 
   // ── Estado de hidratación ─────────────────────────────────────────────────
   isHydrating:    false,  // no bloquea la UI — datos se llenan en background
@@ -76,6 +79,7 @@ const storeCreator = (set, get) => ({
     menus:          data.menus,
     suppliers:      data.suppliers,
     calendarEvents: data.calendarEvents ?? {},
+    purchaseOrders: data.purchaseOrders ?? [],
     isHydrating:    false,
     hasHydrated:    true,
     hydrationError: null,
@@ -153,9 +157,9 @@ const storeCreator = (set, get) => ({
     // Actualización optimista siempre inmediata
     set(state => ({ ingredients: state.ingredients.map(i => i.id === updatedIng.id ? updatedIng : i) }));
 
-    // Detectar si solo cambió currentStock (debounce de 600ms)
+    // Detectar si solo cambió el stock (debounce de 600ms)
     const stockOnly = prev &&
-      prev.currentStock   !== updatedIng.currentStock &&
+      (prev.stockQty !== updatedIng.stockQty || prev.currentStock !== updatedIng.currentStock) &&
       prev.name           === updatedIng.name &&
       prev.unit           === updatedIng.unit &&
       prev.packSize       === updatedIng.packSize &&
@@ -169,7 +173,8 @@ const storeCreator = (set, get) => ({
       clearTimeout(_stockDebounceTimers.get(updatedIng.id));
       const timer = setTimeout(async () => {
         _stockDebounceTimers.delete(updatedIng.id);
-        const { error } = await updateStockInDb(updatedIng.id, updatedIng.currentStock);
+        const newStockQty = updatedIng.stockQty ?? ((updatedIng.currentStock ?? 0) * (updatedIng.packSize ?? 1));
+        const { error } = await updateStockInDb(updatedIng.id, newStockQty, updatedIng.packSize);
         if (error) {
           set(state => ({ ingredients: state.ingredients.map(i => i.id === updatedIng.id ? prev : i) }));
           get().addToast({ type: 'error', message: `No se pudo actualizar el stock: ${mapSupabaseError(error)}` });
@@ -300,10 +305,11 @@ const storeCreator = (set, get) => ({
       const demandSafe = existing.demandSafe + addedDemand;
       return {
         cart: state.cart.map(c => c.ingredientId === ingredient.id
-          ? { ...c, demandSafe, R: computeOrderPacks(demandSafe, c.packSize, c.currentStock, c.minOrder) }
+          ? { ...c, demandSafe, R: computeOrderPacks(demandSafe, c.packSize, c.stockQty, c.minOrder) }
           : c),
       };
     }
+    const stockQty = ingredient.stockQty ?? ((ingredient.currentStock ?? 0) * (ingredient.packSize ?? 1));
     const item = {
       ingredientId: ingredient.id,
       name:         ingredient.name,
@@ -312,9 +318,10 @@ const storeCreator = (set, get) => ({
       pricePerPack: ingredient.pricePerPack,
       supplier:     ingredient.supplier,
       currentStock: ingredient.currentStock ?? 0,
+      stockQty,
       minOrder:     ingredient.minOrder ?? 1,
       demandSafe:   addedDemand,
-      R:            computeOrderPacks(addedDemand, ingredient.packSize, ingredient.currentStock ?? 0, ingredient.minOrder ?? 1),
+      R:            computeOrderPacks(addedDemand, ingredient.packSize, stockQty, ingredient.minOrder ?? 1),
     };
     return { cart: [...state.cart, item] };
   }),
@@ -329,18 +336,22 @@ const storeCreator = (set, get) => ({
     const { items } = aggregateCalendarDemand(calendarEvents, startDate, endDate, storeRecipes, ingredients);
     const cart = items
       .filter(({ ingredient }) => !supplierFilter || supplierFilter.has(ingredient.supplierId ?? ingredient.supplier))
-      .map(({ ingredient, demandSafe }) => ({
-        ingredientId: ingredient.id,
-        name:         ingredient.name,
-        unit:         ingredient.unit,
-        packSize:     ingredient.packSize,
-        pricePerPack: ingredient.pricePerPack,
-        supplier:     ingredient.supplier,
-        currentStock: ingredient.currentStock ?? 0,
-        minOrder:     ingredient.minOrder ?? 1,
-        demandSafe,
-        R: computeOrderPacks(demandSafe, ingredient.packSize, ingredient.currentStock ?? 0, ingredient.minOrder ?? 1),
-      }))
+      .map(({ ingredient, demandSafe }) => {
+        const stockQty = ingredient.stockQty ?? ((ingredient.currentStock ?? 0) * (ingredient.packSize ?? 1));
+        return {
+          ingredientId: ingredient.id,
+          name:         ingredient.name,
+          unit:         ingredient.unit,
+          packSize:     ingredient.packSize,
+          pricePerPack: ingredient.pricePerPack,
+          supplier:     ingredient.supplier,
+          currentStock: ingredient.currentStock ?? 0,
+          stockQty,
+          minOrder:     ingredient.minOrder ?? 1,
+          demandSafe,
+          R: computeOrderPacks(demandSafe, ingredient.packSize, stockQty, ingredient.minOrder ?? 1),
+        };
+      })
       .filter(it => it.R > 0);
     set({ cart, cartMeta: { deliveryDate: deliveryDate ?? null, startDate, endDate } });
   },
@@ -374,6 +385,195 @@ const storeCreator = (set, get) => ({
     }
   },
 
+  // ── Órdenes de compra persistentes ───────────────────────────────────────
+  loadPurchaseOrders: async () => {
+    if (!USE_SUPABASE) return;
+    const { data, error } = await fetchPurchaseOrders(_currentUserId);
+    if (!error && data) set({ purchaseOrders: data });
+  },
+
+  createPurchaseOrderFromCart: async ({ deliveryDate, startDate, endDate }) => {
+    const state = get();
+    const { cart, cartMeta } = state;
+    if (cart.length === 0) return;
+
+    const total = cart.reduce((s, i) => s + i.pricePerPack * i.R, 0);
+    const po = {
+      status:       'pending',
+      deliveryDate: deliveryDate ?? cartMeta.deliveryDate ?? null,
+      startDate:    startDate   ?? cartMeta.startDate    ?? null,
+      endDate:      endDate     ?? cartMeta.endDate      ?? null,
+      total,
+      createdAt:    new Date().toISOString(),
+      items:        cart,
+    };
+    const localPo = { ...po, id: crypto.randomUUID() };
+
+    // Optimistic: agregar PO al store y limpiar carrito
+    set(s => ({ purchaseOrders: [localPo, ...s.purchaseOrders], cart: [] }));
+
+    if (!USE_SUPABASE) return;
+
+    const { data, error } = await insertPurchaseOrder(po, cart, _currentUserId);
+    if (error) {
+      set(s => ({ purchaseOrders: s.purchaseOrders.filter(p => p.id !== localPo.id), cart }));
+      get().addToast({ type: 'error', message: `No se pudo guardar la orden: ${mapSupabaseError(error)}` });
+    } else {
+      set(s => ({ purchaseOrders: s.purchaseOrders.map(p => p.id === localPo.id ? { ...localPo, id: data.id } : p) }));
+    }
+  },
+
+  receivePurchaseOrder: async (poId) => {
+    const state = get();
+    const po = state.purchaseOrders.find(p => p.id === poId);
+    if (!po || po.status !== 'pending') return;
+
+    const prevIngredients = state.ingredients;
+    const prevOrders = state.purchaseOrders;
+
+    // Optimistic: sumar stock + marcar recibida
+    set(s => {
+      const updatedIngredients = s.ingredients.map(ing => {
+        const item = po.items?.find(i => i.ingredientId === ing.id);
+        if (!item) return ing;
+        const added = item.R * item.packSize;
+        const newQty = (ing.stockQty ?? 0) + added;
+        const newPacks = ing.packSize > 0 ? Math.round(newQty / ing.packSize) : 0;
+        return { ...ing, stockQty: newQty, currentStock: newPacks };
+      });
+      const updatedOrders = s.purchaseOrders.map(p =>
+        p.id === poId ? { ...p, status: 'received', receivedAt: new Date().toISOString() } : p
+      );
+      return { ingredients: updatedIngredients, purchaseOrders: updatedOrders };
+    });
+
+    get().addToast({ type: 'success', message: 'Purchase order received — stock updated.' });
+
+    if (!USE_SUPABASE) return;
+
+    try {
+      for (const item of (po.items ?? [])) {
+        const ing = prevIngredients.find(i => i.id === item.ingredientId);
+        const added = item.R * item.packSize;
+        const newQty = (ing?.stockQty ?? 0) + added;
+        await insertStockMovement({ ingredient_id: item.ingredientId, qty_base: added, reason: 'purchase', ref_type: 'purchase_order', ref_id: poId }, _currentUserId);
+        await updateStockInDb(item.ingredientId, newQty, ing?.packSize);
+      }
+      await updatePurchaseOrderStatus(poId, 'received');
+    } catch (err) {
+      set({ ingredients: prevIngredients, purchaseOrders: prevOrders });
+      get().addToast({ type: 'error', message: `No se pudo registrar la recepción: ${err.message}` });
+    }
+  },
+
+  deletePurchaseOrder: async (poId) => {
+    set(s => ({ purchaseOrders: s.purchaseOrders.filter(p => p.id !== poId) }));
+    if (!USE_SUPABASE) return;
+    const { error } = await deletePurchaseOrderFromDb(poId);
+    if (error) {
+      get().addToast({ type: 'error', message: `No se pudo eliminar la orden: ${error.message}` });
+    }
+  },
+
+  // ── Marcar evento del calendario como cocinado ───────────────────────────
+  cookCalendarEvent: async (dateKey, eventId) => {
+    const state = get();
+    const dayEvents = state.calendarEvents[dateKey] ?? [];
+    const event = dayEvents.find(e => e.id === eventId);
+    if (!event || event.cooked) return;
+
+    const recipeIndex = new Map(state.recipes.map(r => [r.id, r]));
+    const consumed = calcConsumption(event, recipeIndex, state.ingredients);
+
+    const prevIngredients = state.ingredients;
+    const prevCalendar = state.calendarEvents;
+
+    set(s => {
+      const updatedIngredients = s.ingredients.map(ing => {
+        const entry = consumed.find(c => c.ingredientId === ing.id);
+        if (!entry) return ing;
+        const newQty = Math.max(0, (ing.stockQty ?? 0) - entry.qtyBase);
+        const newPacks = ing.packSize > 0 ? Math.round(newQty / ing.packSize) : 0;
+        return { ...ing, stockQty: newQty, currentStock: newPacks };
+      });
+      const updatedCalendar = {
+        ...s.calendarEvents,
+        [dateKey]: (s.calendarEvents[dateKey] ?? []).map(e =>
+          e.id === eventId ? { ...e, cooked: true, cookedAt: new Date().toISOString() } : e
+        ),
+      };
+      return { ingredients: updatedIngredients, calendarEvents: updatedCalendar };
+    });
+
+    const summary = consumed.map(c => {
+      const ing = state.ingredients.find(i => i.id === c.ingredientId);
+      return ing ? `${ing.name} ${c.qtyBase.toFixed(1)} ${ing.unit}` : null;
+    }).filter(Boolean).slice(0, 3).join(', ');
+    get().addToast({ type: 'success', message: `Cooked! Consumed: ${summary || 'no items'}` });
+
+    if (!USE_SUPABASE) return;
+
+    try {
+      for (const c of consumed) {
+        const ing = prevIngredients.find(i => i.id === c.ingredientId);
+        const newQty = Math.max(0, (ing?.stockQty ?? 0) - c.qtyBase);
+        await insertStockMovement({ ingredient_id: c.ingredientId, qty_base: -c.qtyBase, reason: 'production', ref_type: 'calendar_event', ref_id: eventId }, _currentUserId);
+        await updateStockInDb(c.ingredientId, newQty, ing?.packSize);
+      }
+      await setEventCooked(eventId, true);
+    } catch (err) {
+      set({ ingredients: prevIngredients, calendarEvents: prevCalendar });
+      get().addToast({ type: 'error', message: `No se pudo registrar la cocción: ${err.message}` });
+    }
+  },
+
+  uncookCalendarEvent: async (dateKey, eventId) => {
+    const state = get();
+    const dayEvents = state.calendarEvents[dateKey] ?? [];
+    const event = dayEvents.find(e => e.id === eventId);
+    if (!event || !event.cooked) return;
+
+    const recipeIndex = new Map(state.recipes.map(r => [r.id, r]));
+    const consumed = calcConsumption(event, recipeIndex, state.ingredients);
+
+    const prevIngredients = state.ingredients;
+    const prevCalendar = state.calendarEvents;
+
+    set(s => {
+      const updatedIngredients = s.ingredients.map(ing => {
+        const entry = consumed.find(c => c.ingredientId === ing.id);
+        if (!entry) return ing;
+        const newQty = (ing.stockQty ?? 0) + entry.qtyBase;
+        const newPacks = ing.packSize > 0 ? Math.round(newQty / ing.packSize) : 0;
+        return { ...ing, stockQty: newQty, currentStock: newPacks };
+      });
+      const updatedCalendar = {
+        ...s.calendarEvents,
+        [dateKey]: (s.calendarEvents[dateKey] ?? []).map(e =>
+          e.id === eventId ? { ...e, cooked: false, cookedAt: null } : e
+        ),
+      };
+      return { ingredients: updatedIngredients, calendarEvents: updatedCalendar };
+    });
+
+    get().addToast({ type: 'success', message: 'Cooking undone — stock restored.' });
+
+    if (!USE_SUPABASE) return;
+
+    try {
+      for (const c of consumed) {
+        const ing = prevIngredients.find(i => i.id === c.ingredientId);
+        const newQty = (ing?.stockQty ?? 0) + c.qtyBase;
+        await updateStockInDb(c.ingredientId, newQty, ing?.packSize);
+      }
+      await deleteMovementsByRef('calendar_event', eventId);
+      await setEventCooked(eventId, false);
+    } catch (err) {
+      set({ ingredients: prevIngredients, calendarEvents: prevCalendar });
+      get().addToast({ type: 'error', message: `No se pudo deshacer la cocción: ${err.message}` });
+    }
+  },
+
   // ── Reset global (vuelve a mockData, útil para logout) ───────────────────
   resetStore: () => set({
     ingredients:    USE_SUPABASE ? [] : ingredientsCatalog,
@@ -383,6 +583,7 @@ const storeCreator = (set, get) => ({
     cart:           [],
     cartMeta:       { deliveryDate: null, startDate: null, endDate: null },
     calendarEvents: {},
+    purchaseOrders: [],
     isHydrating:    false,
     hasHydrated:    false,
     hydrationError: null,

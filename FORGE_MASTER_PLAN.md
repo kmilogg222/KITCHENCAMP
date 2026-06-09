@@ -549,6 +549,19 @@ style:    CSS/visual only
 
 Branch: `main` is production. Create feature branches only when instructed.
 
+### 8.6 Critical Gotchas (lecciones de producción — NO repetir)
+
+> Bugs que solo aparecen en producción (Vercel + Supabase real) y costaron horas de diagnóstico.
+> Léelos antes de tocar auth, el store, o crear archivos en `src/hooks/`.
+
+| # | Gotcha | Regla |
+|---|--------|-------|
+| **G1** | **Deadlock de supabase-js en `onAuthStateChange`** | El callback de `onAuthStateChange` corre **mientras supabase-js retiene un lock de auth interno**. Si dentro haces `await` de cualquier llamada a Supabase (p. ej. `fetchAllUserData()` para hidratar), esas consultas necesitan el token → el mismo lock → **deadlock**: quedan "pending" para siempre. Síntoma: la app pasa el splash y muestra el sidebar, pero el contenido nunca carga. **Regla:** el callback debe ser **síncrono**; difiere cualquier trabajo async con `setTimeout(() => {...}, 0)` para correr fuera del lock. Ver [useAuth.js](src/hooks/useAuth.js). |
+| **G2** | **Selector de Zustand v5 que devuelve objeto/array nuevo** | Zustand v5 compara con `Object.is`. Un selector como `useStore(s => ({...}))` o `Object.fromEntries(...)` crea una referencia nueva en cada render → re-render infinito → **React error #185** (Maximum update depth) → la pestaña se congela. **Regla:** envuelve esos selectores con `useShallow` de `zustand/react/shallow`, o selecciona primitivos por separado. Ver [DataPortalView.jsx](src/views/DataPortalView.jsx). |
+| **G3** | **Colisión de nombres en filesystem case-insensitive (Windows)** | `authContext.js` y `AuthContext.jsx` son el **mismo archivo** para Windows/Rollup. El build resolvía todos los imports al `.js` y `AuthProvider` quedaba inaccesible (`build failed: not exported`). **Regla:** nunca crees dos archivos cuyo nombre difiera solo en mayúsculas/extensión. El hook de contexto vive en [useAuthContext.js](src/hooks/useAuthContext.js) (nombre distinto a `AuthContext.jsx`). |
+| **G4** | **`.env.local` solo local ≠ env vars en Vercel** | `USE_SUPABASE` se evalúa en **build time**. Tener `.env.local` en tu máquina NO basta: hay que configurar `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` en Vercel (Settings → Environment Variables) y re-desplegar. Sin ellas en Vercel, la app corre en modo local (mockData) aunque localmente uses Supabase. |
+| **G5** | **Migración 002/003 es manual** | Las columnas `groups` y `updated_at` de `calendar_events` se aplican a mano en el SQL Editor de Supabase (`002_calendar_groups.sql`, `003_fix_calendar_updated_at.sql`). Un checkout nuevo o un proyecto Supabase recién creado puede no tenerlas. |
+
 ---
 
 ## 9. AI Agent Rules (NON-NEGOTIABLE)
@@ -622,6 +635,7 @@ npm run lint       # ESLint check
 
 ---
 
-*Last updated: 2026-04-15*
+*Last updated: 2026-06-08*
 *Maintainer: Kamilo G*
 *Phase 3 (Supabase backend) completada — ver `agent-sessions/2026-04-14_execution-plan-supabase-migration.md`*
+*2026-06-08: añadidos §8.6 Critical Gotchas (deadlock auth, Zustand #185, colisión de nombres Windows) tras corregir bugs de `plan_base.md` y de producción en Vercel.*

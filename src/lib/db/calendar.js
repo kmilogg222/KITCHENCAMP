@@ -95,3 +95,20 @@ export async function deleteCalendarEventFromDb(eventId) {
     .eq('id', eventId);
   return { error };
 }
+
+/**
+ * Marca un evento del calendario como cocinado o no cocinado.
+ * @param {string}  eventId
+ * @param {boolean} cooked
+ */
+export async function setEventCooked(eventId, cooked) {
+  const update = { cooked };
+  if (cooked) update.cooked_at = new Date().toISOString();
+  else update.cooked_at = null;
+
+  const { error } = await supabase
+    .from('calendar_events')
+    .update(update)
+    .eq('id', eventId);
+  return { error };
+}

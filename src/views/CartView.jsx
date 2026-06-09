@@ -136,6 +136,7 @@ export default function CartView() {
     const suppliers = useStore(state => state.suppliers);
     const onRemove = useStore(state => state.removeFromCart);
     const onClearCart = useStore(state => state.clearCart);
+    const createPurchaseOrderFromCart = useStore(state => state.createPurchaseOrderFromCart);
     const [generatingPDF, setGeneratingPDF] = useState(false);
     const [lastFileName, setLastFileName] = useState(null);
     const [vendorOpen, setVendorOpen] = useState(false);
@@ -162,6 +163,11 @@ export default function CartView() {
         await new Promise(resolve => setTimeout(resolve, 80));
 
         try {
+            await createPurchaseOrderFromCart({
+                deliveryDate: cartMeta?.deliveryDate ?? null,
+                startDate:    cartMeta?.startDate    ?? null,
+                endDate:      cartMeta?.endDate      ?? null,
+            });
             const fileName = generatePurchaseOrderPDF({
                 cart,
                 suppliers,
@@ -173,7 +179,7 @@ export default function CartView() {
             });
             setLastFileName(fileName);
         } catch (err) {
-            console.error('[CartView] Error generando PDF:', err);
+            console.error('[CartView] Error generando orden:', err);
         } finally {
             setGeneratingPDF(false);
         }
@@ -294,11 +300,11 @@ export default function CartView() {
                                         disabled={generatingPDF}
                                         className="btn-primary"
                                         style={{ padding: '10px 20px', opacity: generatingPDF ? 0.8 : 1 }}
-                                        title="Genera un PDF profesional de Purchase Order"
+                                        title="Persiste la orden y genera el PDF de Purchase Order"
                                     >
                                         {generatingPDF
                                             ? <><Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> Generating…</>
-                                            : <><FileDown size={15} /> Download PDF</>
+                                            : <><FileDown size={15} /> Generate Order</>
                                         }
                                     </button>
                                 </div>
