@@ -13,7 +13,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ChefHat, Calendar, Package, Truck, ShoppingCart, ClipboardList, Calculator, Activity, Users, LogOut, ArrowUpDown } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import { useAuthContext } from '../hooks/authContext';
+import { useAuthContext } from '../hooks/useAuthContext';
 import { USE_SUPABASE } from '../lib/db/client';
 
 export default function Sidebar() {

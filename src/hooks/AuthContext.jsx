@@ -5,7 +5,7 @@
  * El contexto y useAuthContext viven en ./authContext.js.
  */
 import { useAuth } from './useAuth';
-import { AuthContext } from './authContext';
+import { AuthContext } from './useAuthContext';
 
 export function AuthProvider({ children }) {
   const auth = useAuth();

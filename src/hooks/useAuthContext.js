@@ -1,7 +1,8 @@
 /**
- * @file authContext.js
+ * @file useAuthContext.js
  * @description Contexto de auth y hook de consumo — sin componentes React.
  * Separado de AuthContext.jsx para satisfacer react-refresh/only-export-components.
+ * Nombre diferenciado de AuthContext.jsx para evitar colisiones en filesystems case-insensitive (Windows).
  */
 import { createContext, useContext } from 'react';
 

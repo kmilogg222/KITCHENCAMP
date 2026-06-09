@@ -9,7 +9,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 // ── Auth: proveedor único de sesión ───────────────────────────────────────────
 import { AuthProvider } from './hooks/AuthContext';
-import { useAuthContext } from './hooks/authContext';
+import { useAuthContext } from './hooks/useAuthContext';
 
 // ── Componentes Globales ──────────────────────────────────────────────────────
 import Sidebar         from './components/Sidebar';
