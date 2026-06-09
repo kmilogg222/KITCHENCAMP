@@ -131,7 +131,7 @@ export function dbIngredientToStore(ing, supplierMap) {
   };
 }
 
-export function dbRecipeToStore(recipe, recipeIngRows, ingredientMap) {
+export function dbRecipeToStore(recipe, recipeIngRows, _ingredientMap) {
   // Reconstruir ingredients[] anidado  con la forma que espera el store
   const ingredients = recipeIngRows.map(ri => {
     const ref = {

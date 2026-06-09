@@ -5,7 +5,7 @@
  * La hidratación del store se hace via useStore.getState() (acceso imperativo)
  * para evitar dependencias circulares y el deadlock de gotrue-js en StrictMode.
  */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase, USE_SUPABASE } from '../lib/db/client';
 import { fetchAllUserData } from '../lib/db/transform';
 import { useStore, setCurrentUserId } from '../store/useStore';
@@ -92,7 +92,6 @@ export function useAuth() {
       isMounted = false;
       subscription.unsubscribe();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Acciones de auth ─────────────────────────────────────────────────────

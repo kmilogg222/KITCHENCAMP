@@ -398,7 +398,7 @@ export default function CreateRecipeView() {
     const [showEmoji, setShowEmoji] = useState(false);
     const [errors, setErrors] = useState({});
     const [saved, setSaved] = useState(false);
-    const [submitting, setSubmitting] = useState(false);
+    const [_submitting, setSubmitting] = useState(false);
 
     const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -454,7 +454,7 @@ export default function CreateRecipeView() {
         try {
             // Separate new ingredients (to be added to catalog)
             const newIngredients = [];
-            const recipeIngredients = slots.map((s, i) => {
+            const recipeIngredients = slots.map((s) => {
                 // Resolve ingredientId (existing or freshly created)
                 let ingredientId;
                 if (s.mode === 'existing') {

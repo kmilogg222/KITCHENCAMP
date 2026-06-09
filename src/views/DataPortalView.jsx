@@ -36,12 +36,14 @@ export default function DataPortalView() {
   const addToast = useStore(s => s.addToast);
 
   // ── Entity counts from store ──
-  const counts = {};
-  for (const key of ENTITY_KEYS) {
-    const storeKey = ENTITY_REGISTRY[key].storeKey;
-    const data = useStore(s => s[storeKey]);
-    counts[key] = Array.isArray(data) ? data.length : Object.keys(data ?? {}).length;
-  }
+  const counts = useStore(s =>
+    Object.fromEntries(
+      ENTITY_KEYS.map(key => {
+        const data = s[ENTITY_REGISTRY[key].storeKey];
+        return [key, Array.isArray(data) ? data.length : Object.keys(data ?? {}).length];
+      })
+    )
+  );
 
   // ── Export handler ──
   const handleExport = () => {
