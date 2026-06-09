@@ -272,6 +272,20 @@ export const defaultGroups = [
 // D       = Σ(Pi × Ci)        total demand
 // D_safe  = D × 1.10          +10% safety margin
 // R       = ⌈D_safe / V⌉      packs to order
+
+/**
+ * Packs a ordenar descontando stock disponible y respetando mínimo de pedido.
+ * netPacks = max(0, ceil(demandSafe / packSize) - currentStock)
+ * R = netPacks > 0 ? max(netPacks, minOrder) : 0
+ */
+export function computeOrderPacks(demandSafe, packSize, currentStock = 0, minOrder = 1) {
+  if (!packSize || packSize <= 0) return 0;
+  const grossPacks = Math.ceil(demandSafe / packSize);
+  const netPacks = Math.max(0, grossPacks - (currentStock ?? 0));
+  if (netPacks <= 0) return 0;
+  return Math.max(netPacks, minOrder ?? 1);
+}
+
 export function calcRequisition(resolvedIngredient, groups) {
     const portions = resolvedIngredient.portionByGroup;
     const D = groups.reduce((acc, g) => acc + g.count * (portions[g.id] ?? 0), 0);

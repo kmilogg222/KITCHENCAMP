@@ -10,7 +10,7 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ingredientsCatalog, recipes, menus, suppliers } from '../data/mockData';
+import { ingredientsCatalog, recipes, menus, suppliers, computeOrderPacks } from '../data/mockData';
 import { USE_SUPABASE } from '../lib/db/client';
 
 // ── Importaciones de DB (solo se usan cuando USE_SUPABASE = true) ─────────────
@@ -154,11 +154,15 @@ const storeCreator = (set, get) => ({
 
     // Detectar si solo cambió currentStock (debounce de 600ms)
     const stockOnly = prev &&
-      prev.currentStock !== updatedIng.currentStock &&
-      prev.name     === updatedIng.name &&
-      prev.unit     === updatedIng.unit &&
-      prev.cost     === updatedIng.cost &&
-      prev.supplier === updatedIng.supplier;
+      prev.currentStock   !== updatedIng.currentStock &&
+      prev.name           === updatedIng.name &&
+      prev.unit           === updatedIng.unit &&
+      prev.packSize       === updatedIng.packSize &&
+      prev.minOrder       === updatedIng.minOrder &&
+      prev.pricePerPack   === updatedIng.pricePerPack &&
+      prev.supplier       === updatedIng.supplier &&
+      prev.substitutable  === updatedIng.substitutable &&
+      prev.substitute     === updatedIng.substitute;
 
     if (stockOnly) {
       clearTimeout(_stockDebounceTimers.get(updatedIng.id));
@@ -285,15 +289,37 @@ const storeCreator = (set, get) => ({
     }
   },
 
-  // ── Cart (siempre efímero — no se persiste en DB) ─────────────────────────
-  addToCart: (item) => set((state) => {
-    const existing = state.cart.find(c => c.ingredient.id === item.ingredient.id);
+  // ── Cart (efímero — no se persiste en DB) ────────────────────────────────
+  // item canónico: { ingredientId, name, unit, packSize, pricePerPack, supplier,
+  //                  currentStock, minOrder, demandSafe, R }
+  addToCart: (ingredient, result) => set((state) => {
+    const addedDemand = result?.D_safe ?? 0;
+    const existing = state.cart.find(c => c.ingredientId === ingredient.id);
     if (existing) {
-      return { cart: state.cart.map(c => c.ingredient.id === item.ingredient.id ? { ...c, packs: c.packs + item.packs } : c) };
+      const demandSafe = existing.demandSafe + addedDemand;
+      return {
+        cart: state.cart.map(c => c.ingredientId === ingredient.id
+          ? { ...c, demandSafe, R: computeOrderPacks(demandSafe, c.packSize, c.currentStock, c.minOrder) }
+          : c),
+      };
     }
+    const item = {
+      ingredientId: ingredient.id,
+      name:         ingredient.name,
+      unit:         ingredient.unit,
+      packSize:     ingredient.packSize,
+      pricePerPack: ingredient.pricePerPack,
+      supplier:     ingredient.supplier,
+      currentStock: ingredient.currentStock ?? 0,
+      minOrder:     ingredient.minOrder ?? 1,
+      demandSafe:   addedDemand,
+      R:            computeOrderPacks(addedDemand, ingredient.packSize, ingredient.currentStock ?? 0, ingredient.minOrder ?? 1),
+    };
     return { cart: [...state.cart, item] };
   }),
-  removeFromCart: (id) => set(state => ({ cart: state.cart.filter(c => c.ingredient.id !== id) })),
+  removeFromCart: (ingredientId) => set(state => ({
+    cart: state.cart.filter(c => c.ingredientId !== ingredientId),
+  })),
   clearCart: () => set({ cart: [] }),
 
   // ── Calendar Events ───────────────────────────────────────────────────────
