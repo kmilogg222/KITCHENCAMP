@@ -15,10 +15,10 @@ export async function insertCalendarEvent(event, dateKey, userId) {
   const row = {
     user_id:    userId,
     event_date: dateKey,
-    slot:       event.slot,
+    slot:       event.slotKey,
     type:       event.type,
-    recipe_id:  event.type === 'recipe' ? event.itemId : null,
-    menu_id:    event.type === 'menu'   ? event.itemId : null,
+    recipe_id:  event.type === 'recipe' ? (event.itemId ?? event.recipe?.id) : null,
+    menu_id:    event.type === 'menu'   ? (event.itemId ?? event.menu?.id)   : null,
     note:       event.note ?? '',
   };
 
@@ -57,10 +57,10 @@ export async function setCalendarEventsForDate(dateKey, events, userId) {
   const rows = events.map(ev => ({
     user_id:    userId,
     event_date: dateKey,
-    slot:       ev.slot,
+    slot:       ev.slotKey,
     type:       ev.type,
-    recipe_id:  ev.type === 'recipe' ? ev.itemId : null,
-    menu_id:    ev.type === 'menu'   ? ev.itemId : null,
+    recipe_id:  ev.type === 'recipe' ? (ev.itemId ?? ev.recipe?.id) : null,
+    menu_id:    ev.type === 'menu'   ? (ev.itemId ?? ev.menu?.id)   : null,
     note:       ev.note ?? '',
   }));
 

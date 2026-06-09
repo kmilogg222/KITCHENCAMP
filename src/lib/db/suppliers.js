@@ -6,9 +6,11 @@ import { supabase } from './client';
 import { storeSupplierToDb } from './transform';
 
 export async function insertSupplier(supplier, userId) {
+  // Omit id so Supabase generates a valid UUID (the store's custom string IDs are not UUIDs)
+  const { id: _tempId, ...row } = storeSupplierToDb(supplier, userId);
   const { data, error } = await supabase
     .from('suppliers')
-    .insert(storeSupplierToDb(supplier, userId))
+    .insert(row)
     .select()
     .single();
   return { data, error };
