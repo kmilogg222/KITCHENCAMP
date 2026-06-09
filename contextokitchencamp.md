@@ -175,6 +175,7 @@ KITCHENCAMP/
     │   ├── StarRating.jsx      → Rating de estrellas
     │   ├── SkeletonList.jsx    → Placeholder de carga
     │   ├── ImportPreviewModal.jsx → Preview de importación de datos
+    │   ├── UnsavedChangesModal.jsx → Modal de confirmación al salir con cambios sin guardar
     │   └── ErrorBoundary.jsx   → Captura de errores de render
     │
     ├── constants/
@@ -450,8 +451,10 @@ la DB con escrituras al usar el stepper +/−.
 - **Dashboard** — Stat cards + widgets bento (menú de hoy, low inventory, mockups de delivery/staff).
 - **Recipes** — Lista filtrable + calculadora de receta única; inputs de comensales A/B/C; tabla
   de requisición; agregar al carrito. `CreateRecipeView` permite ingredientes "existentes" o
-  "nuevos inline", modo per-person o yield, merma opcional y sustituto.
-- **Menus** — Calculadora consolidada con detección de ingredientes compartidos.
+  "nuevos inline", modo per-person o yield, merma opcional y sustituto. Navigation guard
+  (`useBlocker`) avisa antes de salir con cambios sin guardar.
+- **Menus** — Calculadora consolidada con detección de ingredientes compartidos. `CreateMenuView`
+  también incluye navigation guard (`useBlocker`) para proteger cambios no guardados.
 - **Calendar** — Planificador mensual, 4 franjas (Breakfast/Lunch/Dinner/Snack); asigna recetas o
   menús con conteo de comensales por grupo.
 - **Inventory** — CRUD del catálogo con barra de stock, stepper +/− y modal de creación/edición.

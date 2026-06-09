@@ -101,6 +101,9 @@
 - [x] **Architecture documentation** — `rules.md`, `architecture.md`, `tasks.md`, `docs/GUIDE.md`
 - [x] **Master plan + tracker** — `FORGE_MASTER_PLAN.md`, `DEVELOPMENT_TRACKER.md` (this file)
 
+### UI/UX Improvements (2026-06-09)
+- [x] **Navigation guard — unsaved changes warning** — `UnsavedChangesModal.jsx` (nuevo componente reutilizable): modal glass-card con overlay blur, ícono de alerta y botones "Stay" / "Leave anyway". `CreateRecipeView` y `CreateMenuView` usan `useBlocker(isDirty && !saved)` de react-router-dom v7 para interceptar cualquier navegación (Sidebar, Back del browser, `navigate()` programático) cuando hay cambios sin guardar. `isDirty` se activa en cualquier modificación del formulario y se resetea al guardar exitosamente.
+
 ### UI/UX Improvements (2026-04-14)
 - [x] **New ingredient units** — Added `gal`, `qt`, `lb`, `1#` to `INGREDIENT_UNITS` in `theme.js`; propagates automatically to CreateRecipeView and InventoryView
 - [x] **Substitute catalog picker** — In CreateRecipeView (`IngredientSlot`) and InventoryView (`IngredientModal`): "Has substitute" now offers a toggle between "From catalog" (select from existing ingredients) and "Type manually" (free text); initializes to catalog mode if existing substitute value matches a catalog name
@@ -301,7 +304,7 @@ The `ingredients[]` array inside a recipe stores refs, not full catalog objects.
 
 ---
 
-*Last updated: 2026-04-18*
+*Last updated: 2026-06-09*
 *Maintainer: Kamilo G*
 *Fase 3 completada — ver `agent-sessions/2026-04-14_execution-plan-supabase-migration.md`*
 *Bug fixes post-Fase 3 — ver `agent-sessions/2026-04-18_supabase-bug-fixes.md`*

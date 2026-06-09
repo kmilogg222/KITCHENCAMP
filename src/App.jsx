@@ -5,7 +5,7 @@
  * Todos los componentes hijos usan useAuthContext() para acceder a user/signOut/etc.
  */
 import React, { Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
 
 // ── Auth: proveedor único de sesión ───────────────────────────────────────────
 import { AuthProvider } from './hooks/AuthContext';
@@ -95,22 +95,7 @@ function AppContent() {
             </div>
           ) : (
             <Suspense fallback={<FallbackLoader />}>
-              <Routes>
-                <Route path="/dashboard"        element={<DashboardView />} />
-                <Route path="/recipes"          element={<RecipesView />} />
-                <Route path="/recipes/create"   element={<CreateRecipeView />} />
-                <Route path="/recipes/edit/:id" element={<CreateRecipeView />} />
-                <Route path="/menus"            element={<MenusView />} />
-                <Route path="/menus/create"     element={<CreateMenuView />} />
-                <Route path="/menus/edit/:id"   element={<CreateMenuView />} />
-                <Route path="/calendar"         element={<CalendarView />} />
-                <Route path="/inventory"        element={<InventoryView />} />
-                <Route path="/suppliers"        element={<SuppliersView />} />
-                <Route path="/cart"             element={<CartView />} />
-                <Route path="/orders"           element={<OrdersView />} />
-                <Route path="/data"             element={<DataPortalView />} />
-                <Route path="*"                 element={<Navigate to="/dashboard" replace />} />
-              </Routes>
+              <Outlet />
             </Suspense>
           )}
 
@@ -126,15 +111,38 @@ function AppContent() {
   );
 }
 
+// ── Router (data router — requerido por useBlocker) ───────────────────────────
+const router = createBrowserRouter([
+  {
+    path: '/',
+    element: <AppContent />,
+    children: [
+      { index: true,                        element: <Navigate to="/dashboard" replace /> },
+      { path: 'dashboard',                  element: <DashboardView /> },
+      { path: 'recipes',                    element: <RecipesView /> },
+      { path: 'recipes/create',             element: <CreateRecipeView /> },
+      { path: 'recipes/edit/:id',           element: <CreateRecipeView /> },
+      { path: 'menus',                      element: <MenusView /> },
+      { path: 'menus/create',               element: <CreateMenuView /> },
+      { path: 'menus/edit/:id',             element: <CreateMenuView /> },
+      { path: 'calendar',                   element: <CalendarView /> },
+      { path: 'inventory',                  element: <InventoryView /> },
+      { path: 'suppliers',                  element: <SuppliersView /> },
+      { path: 'cart',                       element: <CartView /> },
+      { path: 'orders',                     element: <OrdersView /> },
+      { path: 'data',                       element: <DataPortalView /> },
+      { path: '*',                          element: <Navigate to="/dashboard" replace /> },
+    ],
+  },
+]);
+
 // ── App raíz ──────────────────────────────────────────────────────────────────
 export default function App() {
   return (
     // AuthProvider envuelve TODO — useAuth() se ejecuta UNA SOLA VEZ aquí
     <AuthProvider>
       <AuthGate>
-        <BrowserRouter>
-          <AppContent />
-        </BrowserRouter>
+        <RouterProvider router={router} />
       </AuthGate>
     </AuthProvider>
   );
