@@ -59,25 +59,37 @@ export function useAuth() {
 
     let isMounted = true;
 
-    // Obtener sesión existente al montar
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!isMounted) return;
-      const sessionUser = session?.user ?? null;
-      setUser(sessionUser);
-      if (sessionUser) await hydrateStore(sessionUser);
-      setLoading(false);
-    });
+    // Obtener sesión existente al montar.
+    // .catch evita que un fallo de red deje la app atascada en el splash (loading=true).
+    supabase.auth.getSession()
+      .then(async ({ data: { session } }) => {
+        if (!isMounted) return;
+        const sessionUser = session?.user ?? null;
+        setUser(sessionUser);
+        if (sessionUser) await hydrateStore(sessionUser);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        console.error('[useAuth] getSession failed:', err?.message);
+        setLoading(false);
+      });
 
-    // Escuchar cambios de sesión
+    // Escuchar cambios de sesión.
+    // IMPORTANTE: el callback debe ser SÍNCRONO. supabase-js retiene un lock de auth
+    // mientras corre el callback; hacer aquí llamadas await a la DB (que necesitan el
+    // token y por tanto el mismo lock) provoca un deadlock y las consultas quedan
+    // colgadas para siempre. Por eso la hidratación se difiere con setTimeout(0),
+    // fuera del lock.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         if (!isMounted) return;
         const sessionUser = session?.user ?? null;
         setUser(sessionUser);
 
         if (event === 'SIGNED_IN' && sessionUser) {
           setLoading(false);
-          await hydrateStore(sessionUser);
+          setTimeout(() => { if (isMounted) hydrateStore(sessionUser); }, 0);
         }
 
         if (event === 'SIGNED_OUT') {
