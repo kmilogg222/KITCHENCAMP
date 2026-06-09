@@ -267,22 +267,74 @@ export function aggregateCalendarDemand(calendarEvents, startDate, endDate, reci
 
 ---
 
-## Checklist transversal al terminar
+## Estado del lint al cierre de esta sesión
 
-- [ ] `npm run lint` — solo los 11 errores pre-existentes (en AuthGate, Sidebar, AuthContext, useAuth, migration, transform, CreateRecipeView, DashboardView, DataPortalView). Cero errores nuevos.
-- [ ] `npm run build` — sin errores.
-- [ ] Búsqueda global de `.ingredient.id` y `c.packs` en código de carrito → 0 resultados.
-- [ ] Búsqueda global de `useCartManager` → 0 resultados.
-- [ ] Probar modo local (sin `.env.local`) y modo Supabase — carrito y generación desde calendario funcionan en ambos.
-- [ ] `src/lib/io/registry.js` y `validate.js` — el campo `groups` en calendar exports es compatible (validación permisiva, ya verificado; imports sin `groups` reciben default `{A:0,B:0,C:0}`).
+`npm run lint` produce **2 errores** (commit `ca3c926`). Los 9 anteriores fueron corregidos.
+Los 2 restantes son **no triviales** y se dejan documentados para una sesión futura.
 
 ---
 
-## Commits sugeridos para las Fases restantes
+### Error A — `src/hooks/AuthContext.jsx:19` · `react-refresh/only-export-components`
 
 ```
-feat(po): generar orden de compra desde rango del calendario
-feat(pdf): fecha de entrega y período en la orden
+Fast refresh only works when a file only exports components.
+Use a new file to share constants or functions between components.
+```
+
+**Diagnóstico:** `AuthContext.jsx` exporta tanto el componente `AuthContext`/`AuthProvider` como
+constantes o funciones no-componente (probablemente el contexto en sí o un helper). Vite Fast Refresh
+solo acepta archivos que exportan exclusivamente componentes React; cualquier otro export rompe el HMR.
+
+**Acción requerida:**
+1. Leer `src/hooks/AuthContext.jsx` completo para identificar qué exports no son componentes.
+2. Mover esos exports a un archivo nuevo, p. ej. `src/hooks/authContext.js` (sin mayúscula, no componente).
+3. Actualizar todos los imports que consuman esos exports en los archivos que usen `AuthContext`.
+4. Verificar que Fast Refresh funcione en dev (`npm run dev`) y que `npm run lint` quede limpio.
+
+**Precaución:** Este archivo es central para el flujo de autenticación. Verificar en modo Supabase
+(`USE_SUPABASE=true`) y en modo local que el login/logout sigue funcionando tras el refactor.
+
+---
+
+### Error B — `src/lib/db/migration.js:16` · `no-unused-vars`
+
+```
+'storeRecipeIngredientsToDb' is defined but never used.
+Allowed unused vars must match /^[A-Z_]/u
+```
+
+**Diagnóstico:** La función `storeRecipeIngredientsToDb` está importada o definida en `migration.js`
+pero no tiene ninguna llamada en el archivo ni en el resto del proyecto.
+
+**Acción requerida:**
+1. Buscar `storeRecipeIngredientsToDb` globalmente en el proyecto:
+   - Si tiene **0 referencias** fuera de su definición → borrarla (o borrar el import si viene de otra
+     parte). Confirmar que no se usa en ningún flujo de migración legacy.
+   - Si tiene referencias en otros archivos → el import está mal (quizás fue renombrada). Corregirlo.
+2. Verificar que `npm run build` siga limpio tras el cambio.
+
+**Precaución:** `migration.js` gestiona la migración de datos localStorage → Supabase. No borrar
+funciones sin confirmar que no participan en ningún flujo activo (especialmente el de primer login
+con datos locales existentes). Buscar también en `src/lib/db/index.js` y en `AuthContext.jsx`.
+
+---
+
+## Checklist transversal al terminar
+
+- [x] `npm run lint` — 9 de 11 errores pre-existentes corregidos. Quedan 2 (documentados arriba).
+- [x] `npm run build` — sin errores.
+- [x] Búsqueda global de `.ingredient.id` y `c.packs` en código de carrito → 0 resultados.
+- [x] Búsqueda global de `useCartManager` → 0 resultados.
+- [ ] Probar modo local (sin `.env.local`) y modo Supabase — carrito y generación desde calendario.
+- [ ] `src/lib/io/registry.js` y `validate.js` — el campo `groups` en calendar exports es compatible.
+
+---
+
+## Commits de esta sesión
+
+```
+0c48433  feat(po): generar orden de compra desde rango del calendario + PDF
+ca3c926  fix(lint): corregir 9 errores de eslint — unused vars, hooks en loop, args ignorados
 ```
 
 ---
