@@ -460,7 +460,7 @@ function hexToRgb(hex) {
  * @param {number}      opts.grandTotal - Gran total del carrito.
  * @returns {string} Nombre del archivo PDF.
  */
-export function generatePurchaseOrderPDF({ cart, suppliers, grandTotal }) {
+export function generatePurchaseOrderPDF({ cart, suppliers, grandTotal, deliveryDate, dateRange }) {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const poNumber = makePONumber();
     const dateStr = formatDate(new Date());
@@ -474,6 +474,23 @@ export function generatePurchaseOrderPDF({ cart, suppliers, grandTotal }) {
     // ── Página y secciones iniciales ──────────────────────────────────────────
     let y = drawHeader(doc, poNumber, dateStr);
     y = drawMeta(doc, y);
+
+    // Fecha de entrega y período (opcionales — compatibilidad hacia atrás)
+    if (deliveryDate || dateRange?.start) {
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...C.textDark);
+        if (deliveryDate) {
+            doc.text(`Delivery Date / Fecha de entrega:  ${deliveryDate}`, MARGIN, y);
+            y += 5;
+        }
+        if (dateRange?.start) {
+            doc.text(`Período:  ${dateRange.start} – ${dateRange.end}`, MARGIN, y);
+            y += 5;
+        }
+        y += 3;
+    }
+
     y = drawSupplierSummary(doc, y, grouped, suppliers);
 
     // ── Tablas de ítems por supplier ──────────────────────────────────────────

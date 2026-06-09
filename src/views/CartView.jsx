@@ -132,6 +132,7 @@ function PDFSuccessBanner({ fileName }) {
 
 export default function CartView() {
     const cart = useStore(state => state.cart);
+    const cartMeta = useStore(state => state.cartMeta);
     const suppliers = useStore(state => state.suppliers);
     const onRemove = useStore(state => state.removeFromCart);
     const onClearCart = useStore(state => state.clearCart);
@@ -161,7 +162,15 @@ export default function CartView() {
         await new Promise(resolve => setTimeout(resolve, 80));
 
         try {
-            const fileName = generatePurchaseOrderPDF({ cart, suppliers, grandTotal });
+            const fileName = generatePurchaseOrderPDF({
+                cart,
+                suppliers,
+                grandTotal,
+                deliveryDate: cartMeta?.deliveryDate,
+                dateRange: cartMeta?.startDate
+                    ? { start: cartMeta.startDate, end: cartMeta.endDate }
+                    : undefined,
+            });
             setLastFileName(fileName);
         } catch (err) {
             console.error('[CartView] Error generando PDF:', err);
@@ -183,6 +192,11 @@ export default function CartView() {
                         <p style={{ fontSize: 13, color: '#9b6dca', margin: '4px 0 0' }}>
                             {cart.length} ingredient{cart.length !== 1 ? 's' : ''} · {totalPacks} packs · ${grandTotal.toFixed(2)} total
                         </p>
+                    )}
+                    {cartMeta?.startDate && (
+                        <div style={{ fontSize: 12, color: '#9b6dca', marginTop: 4 }}>
+                            Del {cartMeta.startDate} al {cartMeta.endDate} · Entrega: {cartMeta.deliveryDate || '—'}
+                        </div>
                     )}
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>

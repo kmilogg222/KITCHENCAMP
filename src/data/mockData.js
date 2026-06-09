@@ -429,3 +429,49 @@ export function calcMenuRequisition(menu, allRecipes, catalog, groups) {
 
     return { consolidated, byRecipe };
 }
+
+/**
+ * Agrega la demanda de todos los eventos del calendario en [startDate, endDate]
+ * (strings "YYYY-MM-DD", inclusivos). Reutiliza resolveIngredients + calcRequisition.
+ * @returns {{ items: Array<{ ingredient, demandSafe }>, mealsCount: number, recipesCount: number }}
+ */
+export function aggregateCalendarDemand(calendarEvents, startDate, endDate, recipes, catalog) {
+  const recipeIndex  = new Map(recipes.map(r => [r.id, r]));
+  const catalogIndex = new Map(catalog.map(i => [i.id, i]));
+  const demandByIng  = new Map();
+
+  let mealsCount = 0;
+  const recipeIdsUsed = new Set();
+
+  for (const [dateKey, events] of Object.entries(calendarEvents)) {
+    if (dateKey < startDate || dateKey > endDate) continue;
+    for (const ev of events) {
+      const groups = [
+        { id: 'A', count: ev.groups?.A ?? 0 },
+        { id: 'B', count: ev.groups?.B ?? 0 },
+        { id: 'C', count: ev.groups?.C ?? 0 },
+      ];
+      if (groups.every(g => g.count === 0)) continue;
+      mealsCount++;
+
+      const eventRecipes = ev.type === 'menu'
+        ? (ev.menu?.recipeIds ?? []).map(rid => recipeIndex.get(rid)).filter(Boolean)
+        : [recipeIndex.get(ev.recipe?.id)].filter(Boolean);
+
+      for (const recipe of eventRecipes) {
+        recipeIdsUsed.add(recipe.id);
+        const resolved = resolveIngredients(recipe, catalogIndex);
+        for (const ing of resolved) {
+          const r = calcRequisition(ing, groups);
+          demandByIng.set(ing.id, (demandByIng.get(ing.id) ?? 0) + r.D_safe);
+        }
+      }
+    }
+  }
+
+  const items = Array.from(demandByIng.entries())
+    .map(([ingredientId, demandSafe]) => ({ ingredient: catalogIndex.get(ingredientId), demandSafe }))
+    .filter(x => x.ingredient);
+
+  return { items, mealsCount, recipesCount: recipeIdsUsed.size };
+}

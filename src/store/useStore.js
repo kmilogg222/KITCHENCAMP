@@ -10,7 +10,7 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ingredientsCatalog, recipes, menus, suppliers, computeOrderPacks } from '../data/mockData';
+import { ingredientsCatalog, recipes, menus, suppliers, computeOrderPacks, aggregateCalendarDemand } from '../data/mockData';
 import { USE_SUPABASE } from '../lib/db/client';
 
 // ── Importaciones de DB (solo se usan cuando USE_SUPABASE = true) ─────────────
@@ -43,6 +43,7 @@ const storeCreator = (set, get) => ({
   menus:          USE_SUPABASE ? [] : menus,
   suppliers:      USE_SUPABASE ? [] : suppliers,
   cart:           [],
+  cartMeta:       { deliveryDate: null, startDate: null, endDate: null },
   calendarEvents: {},
 
   // ── Estado de hidratación ─────────────────────────────────────────────────
@@ -322,6 +323,28 @@ const storeCreator = (set, get) => ({
   })),
   clearCart: () => set({ cart: [] }),
 
+  // Genera el carrito desde un rango del calendario. supplierFilter: Set<supplierId> | null (null = todos)
+  buildCartFromCalendar: ({ startDate, endDate, deliveryDate, supplierFilter = null }) => {
+    const { calendarEvents, recipes: storeRecipes, ingredients } = get();
+    const { items } = aggregateCalendarDemand(calendarEvents, startDate, endDate, storeRecipes, ingredients);
+    const cart = items
+      .filter(({ ingredient }) => !supplierFilter || supplierFilter.has(ingredient.supplier))
+      .map(({ ingredient, demandSafe }) => ({
+        ingredientId: ingredient.id,
+        name:         ingredient.name,
+        unit:         ingredient.unit,
+        packSize:     ingredient.packSize,
+        pricePerPack: ingredient.pricePerPack,
+        supplier:     ingredient.supplier,
+        currentStock: ingredient.currentStock ?? 0,
+        minOrder:     ingredient.minOrder ?? 1,
+        demandSafe,
+        R: computeOrderPacks(demandSafe, ingredient.packSize, ingredient.currentStock ?? 0, ingredient.minOrder ?? 1),
+      }))
+      .filter(it => it.R > 0);
+    set({ cart, cartMeta: { deliveryDate: deliveryDate ?? null, startDate, endDate } });
+  },
+
   // ── Calendar Events ───────────────────────────────────────────────────────
   setCalendarEvents: async (events) => {
     if (!USE_SUPABASE) {
@@ -358,6 +381,7 @@ const storeCreator = (set, get) => ({
     menus:          USE_SUPABASE ? [] : menus,
     suppliers:      USE_SUPABASE ? [] : suppliers,
     cart:           [],
+    cartMeta:       { deliveryDate: null, startDate: null, endDate: null },
     calendarEvents: {},
     isHydrating:    false,
     hasHydrated:    false,

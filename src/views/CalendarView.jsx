@@ -11,6 +11,7 @@
  *  - menus   {Menu[]}   - Available menus (groups of recipes).
  */
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import SkeletonList from '../components/SkeletonList';
 import {
@@ -19,7 +20,7 @@ import {
 } from 'lucide-react';
 import { MEAL_SLOTS, INPUT_STYLE } from '../constants/theme';
 import GroupInput from '../components/GroupInput';
-import { defaultGroups } from '../data/mockData';
+import { defaultGroups, aggregateCalendarDemand } from '../data/mockData';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -450,13 +451,127 @@ function DayPanel({ dateKey, dateLabel, meals, recipes, menus, onAdd, onRemove, 
     );
 }
 
+// ── Modal: Generar Orden de Compra desde rango del calendario ─────────────────
+function GeneratePOModal({ calendarEvents, recipes, ingredients, suppliers, onGenerate, onClose }) {
+    const todayDate = new Date();
+    const dow = todayDate.getDay(); // 0=dom
+    const monday = new Date(todayDate);
+    monday.setDate(todayDate.getDate() - (dow === 0 ? 6 : dow - 1));
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    const fmt = d => d.toISOString().slice(0, 10);
+
+    const [startDate, setStartDate] = useState(fmt(monday));
+    const [endDate, setEndDate]     = useState(fmt(sunday));
+    const [deliveryDate, setDeliveryDate] = useState('');
+    const [selectedSuppliers, setSelectedSuppliers] = useState(
+        new Set(suppliers.map(s => s.id))
+    );
+
+    const summary = useMemo(
+        () => aggregateCalendarDemand(calendarEvents, startDate, endDate, recipes, ingredients),
+        [calendarEvents, startDate, endDate, recipes, ingredients]
+    );
+
+    const toggleSupplier = (id) => setSelectedSuppliers(prev => {
+        const next = new Set(prev);
+        next.has(id) ? next.delete(id) : next.add(id);
+        return next;
+    });
+
+    const allSelected = selectedSuppliers.size === suppliers.length;
+    const supplierFilter = allSelected ? null : selectedSuppliers;
+    const noItems = summary.items.length === 0;
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}>
+            <div className="glass-card" style={{ width: 480, maxWidth: '95vw', padding: 28, maxHeight: '90vh', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                    <h2 style={{ fontSize: 18, fontWeight: 700, color: '#3d1a78', margin: 0 }}>
+                        🧾 Generar Orden de Compra
+                    </h2>
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9b6dca' }}>
+                        <X size={20} />
+                    </button>
+                </div>
+
+                {/* Rango de fechas */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                    <div>
+                        <label style={{ fontSize: 12, color: '#6b3fa0', fontWeight: 600, display: 'block', marginBottom: 4 }}>Desde</label>
+                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={INPUT_STYLE} />
+                    </div>
+                    <div>
+                        <label style={{ fontSize: 12, color: '#6b3fa0', fontWeight: 600, display: 'block', marginBottom: 4 }}>Hasta</label>
+                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={INPUT_STYLE} />
+                    </div>
+                </div>
+
+                {/* Fecha de entrega */}
+                <div style={{ marginBottom: 16 }}>
+                    <label style={{ fontSize: 12, color: '#6b3fa0', fontWeight: 600, display: 'block', marginBottom: 4 }}>Fecha de entrega</label>
+                    <input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} style={INPUT_STYLE} />
+                </div>
+
+                {/* Proveedores */}
+                {suppliers.length > 0 && (
+                    <div style={{ marginBottom: 16 }}>
+                        <label style={{ fontSize: 12, color: '#6b3fa0', fontWeight: 600, display: 'block', marginBottom: 8 }}>Proveedores</label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {suppliers.map(s => (
+                                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedSuppliers.has(s.id)}
+                                        onChange={() => toggleSupplier(s.id)}
+                                    />
+                                    {s.name}
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Resumen en vivo */}
+                <div style={{ background: '#f3eeff', borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: 13, color: '#6b3fa0' }}>
+                    {noItems
+                        ? <span style={{ color: '#ef4444' }}>No hay comidas con personas en este rango.</span>
+                        : <span>{summary.mealsCount} comidas · {summary.recipesCount} recetas · {summary.items.length} ingredientes</span>
+                    }
+                </div>
+
+                {/* Acciones */}
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                    <button onClick={onClose} className="btn-ghost" style={{ fontSize: 13 }}>Cancelar</button>
+                    <button
+                        className="btn-primary"
+                        style={{ fontSize: 13, opacity: noItems ? 0.5 : 1 }}
+                        disabled={noItems}
+                        onClick={() => onGenerate({ startDate, endDate, deliveryDate, supplierFilter })}
+                    >
+                        Generar y ver carrito
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function CalendarView() {
     const recipes = useStore(state => state.recipes);
     const menus = useStore(state => state.menus);
+    const suppliers = useStore(state => state.suppliers);
+    const ingredients = useStore(state => state.ingredients);
+    const buildCartFromCalendar = useStore(state => state.buildCartFromCalendar);
+    const navigate = useNavigate();
     const today = new Date();
     const [month, setMonth] = useState(today.getMonth());
     const [year, setYear] = useState(today.getFullYear());
     const [selectedDay, setSelectedDay] = useState(null);
+    const [showPOModal, setShowPOModal] = useState(false);
 
     // meals: { [dateKey]: [{id, type, slotKey, recipe?, menu?, menuRecipes?, note}] }
     const meals = useStore(state => state.calendarEvents);
@@ -547,9 +662,14 @@ export default function CalendarView() {
                         Plan daily meals with individual recipes or full menus
                     </p>
                 </div>
-                <button onClick={goToday} className="btn-ghost" style={{ fontSize: 13 }}>
-                    Today
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={goToday} className="btn-ghost" style={{ fontSize: 13 }}>
+                        Today
+                    </button>
+                    <button onClick={() => setShowPOModal(true)} className="btn-primary" style={{ fontSize: 13 }}>
+                        🧾 Generar Orden de Compra
+                    </button>
+                </div>
             </div>
 
             {/* Stats row */}
@@ -723,6 +843,22 @@ export default function CalendarView() {
                     onAdd={addMeal}
                     onRemove={(mealId) => removeMeal(selectedDay.key, mealId)}
                     onClose={() => setSelectedDay(null)}
+                />
+            )}
+
+            {/* Modal: Generar Orden de Compra */}
+            {showPOModal && (
+                <GeneratePOModal
+                    calendarEvents={meals}
+                    recipes={recipes}
+                    ingredients={ingredients}
+                    suppliers={suppliers}
+                    onGenerate={(params) => {
+                        buildCartFromCalendar(params);
+                        setShowPOModal(false);
+                        navigate('/cart');
+                    }}
+                    onClose={() => setShowPOModal(false)}
                 />
             )}
         </div>

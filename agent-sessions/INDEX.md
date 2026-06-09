@@ -25,6 +25,7 @@ Cuando inicies una sesión con un nuevo agente y necesites contexto de trabajo a
 | 2026-04-18 | [2026-04-18_supabase-bug-fixes.md](2026-04-18_supabase-bug-fixes.md) | Corrección de 2 bugs críticos post-Fase 3: `SUPPLIER_IDS` con UUIDs en vez de nombres + calendar crash por campo `slot` vs `slotKey` y objetos faltantes en hydration | ✅ Completado |
 | 2026-04-18 | [2026-04-18_import-export-system-plan.md](2026-04-18_import-export-system-plan.md) | Plan completo del sistema de Import/Export: Entity Registry, Format Registry, validación, resolución de conflictos, reasignación de IDs, JSON + CSV, DataPortalView UI — 4 fases de implementación | 📐 Diseño completo — pendiente ejecución |
 | 2026-04-20 | [2026-04-20_qa-audit-report.md](2026-04-20_qa-audit-report.md) | Auditoría QA completa: todos los views, capa de datos, auth, cálculos — 0 bugs críticos, 1 funcionales, 3 UI/UX | ✅ Completado |
+| 2026-06-08 | [2026-06-08_cart-po-calendar-implementation.md](2026-06-08_cart-po-calendar-implementation.md) | Corrección carrito (NaN/crash) + grupos A/B/C en calendario + generación de orden de compra desde rango de fechas + PDF con metadata — Fases 0-3 | 🔄 Fases 0-1 ✅ · Fases 2-3 🔴 pendientes |
 
 ---
 
