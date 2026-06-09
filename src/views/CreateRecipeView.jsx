@@ -8,11 +8,12 @@ import {
 const EMOJIS = ['🍗', '🍟', '🥗', '🍝', '🍣', '🥩', '🍲', '🥘', '🌮', '🍕',
     '🥪', '🍜', '🥚', '🫕', '🥦', '🍖', '🧆', '🫔', '🥙', '🍱'];
 const CATEGORIES = ['Main Course', 'Starter', 'Kids Favorite', 'Dessert', 'Vegan', 'Soup', 'Salad', 'Snack'];
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useBlocker } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import { INGREDIENT_UNITS } from '../constants/theme';
 import { Label, TInput, SInput } from '../components/FormControls';
 import { compatibleUnits } from '../utils/units';
+import UnsavedChangesModal from '../components/UnsavedChangesModal';
 
 
 // ── Empty ingredient slot ─────────────────────────────────────────────────────
@@ -413,14 +414,18 @@ export default function CreateRecipeView() {
     const [errors, setErrors] = useState({});
     const [saved, setSaved] = useState(false);
     const [_submitting, setSubmitting] = useState(false);
+    const [isDirty, setIsDirty] = useState(false);
 
-    const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
+    const blocker = useBlocker(isDirty && !saved);
+
+    const setField = (k, v) => { setForm(f => ({ ...f, [k]: v })); setIsDirty(true); };
 
     const updateSlot = (idx, field, val) => {
         setSlots(prev => prev.map((s, i) => i === idx ? { ...s, [field]: val } : s));
+        setIsDirty(true);
     };
-    const addSlot = () => setSlots(prev => [...prev, blankSlot(prev.length)]);
-    const removeSlot = (idx) => setSlots(prev => prev.filter((_, i) => i !== idx));
+    const addSlot = () => { setSlots(prev => [...prev, blankSlot(prev.length)]); setIsDirty(true); };
+    const removeSlot = (idx) => { setSlots(prev => prev.filter((_, i) => i !== idx)); setIsDirty(true); };
 
     // ── Validation ──────────────────────────────────────────────────────────────
     const validate = () => {
@@ -548,6 +553,7 @@ export default function CreateRecipeView() {
                 await addRecipe(recipe);
             }
 
+            setIsDirty(false);
             setSaved(true);
             setTimeout(() => navigate('/recipes'), 400);
 
@@ -799,6 +805,12 @@ export default function CreateRecipeView() {
                     </div>
                 </div>
             </div>
+
+            <UnsavedChangesModal
+                isOpen={blocker.state === 'blocked'}
+                onConfirm={blocker.proceed}
+                onCancel={blocker.reset}
+            />
         </div>
     );
 }

@@ -17,9 +17,10 @@ import {
 const MENU_EMOJIS = ['🍱', '🎉', '🌟', '🥂', '🍽️', '☀️', '🌙', '🎊',
     '🏖️', '🎄', '🦃', '🥗', '🍕', '🌮', '🍣', '🎂', '🍰', '🧁', '🫕', '🥘'];
 
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useBlocker } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import { Label, TInput } from '../components/FormControls';
+import UnsavedChangesModal from '../components/UnsavedChangesModal';
 
 export default function CreateMenuView() {
     const navigate = useNavigate();
@@ -46,16 +47,20 @@ export default function CreateMenuView() {
     const [recipeSearch, setRecipeSearch] = useState('');
     const [errors, setErrors] = useState({});
     const [saved, setSaved] = useState(false);
+    const [isDirty, setIsDirty] = useState(false);
 
-    const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
+    const blocker = useBlocker(isDirty && !saved);
+
+    const setField = (k, v) => { setForm(f => ({ ...f, [k]: v })); setIsDirty(true); };
 
     // ── Recipe management ────────────────────────────────────────────────────
     const addRecipe = (id) => {
         if (!selectedRecipeIds.includes(id)) {
             setSelectedRecipeIds(prev => [...prev, id]);
+            setIsDirty(true);
         }
     };
-    const removeRecipe = (id) => setSelectedRecipeIds(prev => prev.filter(rid => rid !== id));
+    const removeRecipe = (id) => { setSelectedRecipeIds(prev => prev.filter(rid => rid !== id)); setIsDirty(true); };
     const moveRecipe = (idx, direction) => {
         setSelectedRecipeIds(prev => {
             const arr = [...prev];
@@ -64,6 +69,7 @@ export default function CreateMenuView() {
             [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
             return arr;
         });
+        setIsDirty(true);
     };
 
     const selectedRecipes = selectedRecipeIds.map(id => recipes.find(r => r.id === id)).filter(Boolean);
@@ -103,6 +109,7 @@ export default function CreateMenuView() {
             addMenu(menu);
         }
 
+        setIsDirty(false);
         setSaved(true);
         setTimeout(() => navigate('/menus'), 400);
     };
@@ -326,6 +333,12 @@ export default function CreateMenuView() {
                     </div>
                 </div>
             </div>
+
+            <UnsavedChangesModal
+                isOpen={blocker.state === 'blocked'}
+                onConfirm={blocker.proceed}
+                onCancel={blocker.reset}
+            />
         </div>
     );
 }
