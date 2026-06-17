@@ -52,7 +52,9 @@ const CONT_W = PAGE_W - MARGIN * 2;
 /** Genera número de PO único. */
 const makePONumber = () => {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const rand = Math.floor(1000 + Math.random() * 9000);
+    const array = new Uint32Array(1);
+    self.crypto.getRandomValues(array);
+    const rand = 1000 + (array[0] % 9000);
     return `PO-${date}-${rand}`;
 };
 
